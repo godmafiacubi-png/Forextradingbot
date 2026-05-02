@@ -44,6 +44,7 @@ from execution.order_manager import OrderManager
 from monitoring.simple_dashboard import SimpleMonitor
 from monitoring.performance_tracker import PerformanceTracker
 from monitoring.telegram_alerts import TelegramAlerts
+from monitoring.expectancy_tracker import ExpectancyTracker
 
 if BOT_MODE == 'AGGRESSIVE':
     from monitoring.web_dashboard_aggressive import update_dashboard, add_log, start_dashboard
@@ -245,6 +246,7 @@ class TradingBot:
             self.monitor = SimpleMonitor()
             self.tracker = PerformanceTracker()
             self.telegram = TelegramAlerts(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+            self.expectancy_tracker = ExpectancyTracker()
 
             start_dashboard(port=DASHBOARD_PORT)
             update_dashboard('bot_status', 'RUNNING')
@@ -390,6 +392,7 @@ class TradingBot:
                     self.adaptive_threshold.record_result(is_win)
                     self.loss_streak.record_result(is_win)
                     self.perf_adjuster.record_trade(pnl)
+                    self.expectancy_tracker.record(prev.symbol, pnl)
 
                     sym_data_c = self.symbol_data_cache.get(prev.symbol, {})
                     sig_data_c = self.symbol_data_cache.get(f'{prev.symbol}_signal', {})
@@ -787,6 +790,9 @@ class TradingBot:
                 blocked = f"Meta filter ({hub_result.meta_activity:.0%} < threshold)"
             elif ict_score < sym_min_ict:
                 blocked = f"ICT {ict_score}<{sym_min_ict}"
+            # Quiet market kill switch — no edge in flat market
+            elif regime_name == 'QUIET' and adx < QUIET_MARKET_ADX_THRESHOLD:
+                blocked = f"QUIET_MARKET (ADX={adx:.1f}<{QUIET_MARKET_ADX_THRESHOLD})"
             elif confidence < effective_conf_thresh:
                 blocked = f"conf {confidence:.2%}<{effective_conf_thresh:.0%}"
             elif adx < adjusted_adx_thresh:
@@ -1015,6 +1021,7 @@ class TradingBot:
                     for sym, sp in sym_perf.items():
                         logger.info(f"  {sym}: {sp['trades']}T WR={sp['win_rate']:.0%} PnL=${sp['total_pnl']:.2f}")
                     self.monitor.print_status()
+                    self.expectancy_tracker.report()
 
                 if self.iteration % 50 == 0:
                     self.hub.save()  # save ทุก component ในครั้งเดียว

@@ -375,6 +375,10 @@ class DeepRLTradingAgent:
     # ----------------------------------------------------------
 
     def get_rl_adjustment(self, state, base_signal, base_confidence, symbol=""):
+        """
+        v8.0: RL is CONFIRMER ONLY — never changes signal direction.
+        Only adjusts confidence up or down.
+        """
         rl_action = self.select_action(state, symbol=symbol)
         self.action_counts[rl_action] += 1
 
@@ -383,27 +387,33 @@ class DeepRLTradingAgent:
 
         rl_power = self._get_rl_power()
 
-        # RL เป็น CONFIRMER เท่านั้น — ห้ามเปลี่ยน direction
-        adj_signal = base_signal  # signal ไม่เปลี่ยน
+        # Signal NEVER changes — RL only touches confidence
+        adj_signal = base_signal
 
-        if rl_action == 0:  # RL says HOLD
-            penalty = rl_power * 0.20   # reduce confidence max 20%
+        if base_signal == 0:
+            adj_conf = base_confidence
+            source = "rl_pass_no_signal"
+        elif rl_action == 0:
+            # RL says HOLD — penalize confidence
+            penalty = rl_power * 0.20
             adj_conf = base_confidence * (1.0 - penalty)
             source = "rl_hold_penalty"
         elif (rl_action == 1 and base_signal == 1) or (rl_action == 2 and base_signal == -1):
-            # RL agrees with base signal
-            boost = 1.0 + (rl_power * 0.15)   # boost max 15%
+            # RL agrees with base signal — boost confidence
+            boost = 1.0 + (rl_power * 0.15)
             adj_conf = min(base_confidence * boost, 1.0)
             source = "rl_confirm"
-        elif (rl_action == 1 and base_signal == -1) or (rl_action == 2 and base_signal == 1):
-            # RL disagrees — penalty but don't flip
-            penalty = rl_power * 0.35   # reduce confidence max 35%
+        else:
+            # RL disagrees — penalize confidence but do NOT flip direction
+            penalty = rl_power * 0.35
             adj_conf = base_confidence * (1.0 - penalty)
             source = "rl_disagree_penalty"
-        else:
-            # base_signal == 0 or other
-            adj_conf = base_confidence
-            source = "rl_pass"
+
+        # Log RL influence
+        if base_confidence > 0 and abs(adj_conf - base_confidence) > 0.01:
+            change_pct = (adj_conf - base_confidence) / base_confidence * 100
+            logger.debug(f"[DeepRL] {symbol} power={rl_power:.0%} steps={self.train_step} "
+                        f"conf: {base_confidence:.1%} -> {adj_conf:.1%} ({change_pct:+.1f}%) src={source}")
 
         return adj_signal, adj_conf, rl_action, source
 
@@ -420,7 +430,7 @@ class DeepRLTradingAgent:
                 symbol, {}).get("regime", "QUIET")
         self.total_trades += 1
 
-    def record_trade_close(self, symbol, next_state, pnl, pnl_pct, equity=0, rr_ratio=1.5):
+    def record_trade_close(self, symbol, next_state, pnl, pnl_pct, equity=0):
         # ถ้าไม่มี open_state (trade เปิดก่อน restart) — ใช้ next_state แทน
         # RL ยังได้เรียนรู้จาก outcome แม้จะไม่มี entry state
         if symbol not in self.open_states:
@@ -439,7 +449,7 @@ class DeepRLTradingAgent:
 
         if self.reward_calculator:
             reward = self.reward_calculator.calculate_trade_reward(
-                pnl, pnl_pct, equity, hold_bars, regime, rr_ratio=rr_ratio)
+                pnl, pnl_pct, equity, hold_bars, regime)
         else:
             reward = 1.0 + min(pnl_pct * 20, 5.0) if pnl > 0 else -1.0 + max(pnl_pct * 20, -5.0)
 

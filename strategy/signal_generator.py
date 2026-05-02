@@ -13,19 +13,15 @@ class SignalGenerator:
 
     def generate_signals(self, df, ml_threshold_buy=0.54, ml_threshold_sell=0.46):
         """
-        Generate signals with ICT-First decision tree (v8.0).
+        Generate signals with ICT confluence scoring.
 
         ICT Score (0-6):
         +1 for each: OB, FVG, BOS/CHoCH, OTE zone, Structure, Liquidity sweep
 
-        v8.0 Changes (Prop Firm / Hedge Fund mindset):
-        - GATE 1: ICT >= 2 is a hard gate — no ICT, no signal (no exceptions)
-        - GATE 2: ML must confirm direction (ml_prob > threshold)
-        - Exception: ICT >= 3 + borderline ML (buy: >0.52, sell: <0.48) allowed with confidence penalty
-        - Removed: ML-only mode (ml_prob > 0.60 without ICT) — too risky
-        - Removed: ML + ADX mode (without ICT) — too risky
-        - Confidence = ICT weight 60% + ML weight 40%
-        - ICT bonus weights increased (ICT is now core, not bonus)
+        v8.0 Prop Firm Changes:
+        - ICT >= 2 is HARD GATE (mandatory, no ML-only exceptions)
+        - ML is CONFIRMATION layer (not trigger)
+        - ICT weight: 60%, ML weight: 40% in base confidence
         """
         df = df.copy()
         df['signal'] = 0
@@ -88,37 +84,34 @@ class SignalGenerator:
             adx = float(df.iloc[i].get('adx', 0))
             ema_cross = float(df.iloc[i].get('ema_cross', 0))
 
-            # ===== NEW: ICT-FIRST DECISION TREE (v8.0) =====
+            # ===== NEW v8.0: ICT-FIRST DECISION TREE =====
+            # GATE 1: ICT >= 2 is MANDATORY (hard gate, no ML-only exceptions)
             signal = 0
             confidence = 0.0
 
-            # GATE 1: ICT must be >= 2 (hard gate, no exceptions)
             if ict_buy >= 2:
                 # GATE 2: ML must confirm direction
                 if ml_prob > ml_threshold_buy:
                     signal = 1
-                    # Confidence = ICT weight 60% + ML weight 40%
-                    ict_conf = min(ict_buy / 4.0, 1.0)   # confidence caps at 4 ICT signals (5-6 get same cap; extra benefit via ICT bonus section)
-                    ml_conf  = (ml_prob - 0.5) * 2.0
-                    confidence = ict_conf * 0.60 + np.clip(ml_conf, 0, 1) * 0.40
-                # ICT strong (>=3) but ML borderline — allow with penalty
+                    ict_conf = min(ict_buy / 4.0, 1.0)
+                    ml_conf  = np.clip((ml_prob - 0.5) * 2.0, 0, 1)
+                    confidence = ict_conf * 0.60 + ml_conf * 0.40
                 elif ict_buy >= 3 and ml_prob > 0.52:
+                    # Very strong ICT, borderline ML
                     signal = 1
                     ict_conf = min(ict_buy / 4.0, 1.0)
-                    confidence = ict_conf * 0.70   # lower weight, no ML boost
+                    confidence = ict_conf * 0.65
 
             elif ict_sell >= 2:
-                # GATE 2: ML must confirm direction
                 if ml_prob < ml_threshold_sell:
                     signal = -1
                     ict_conf = min(ict_sell / 4.0, 1.0)
-                    ml_conf  = (0.5 - ml_prob) * 2.0
-                    confidence = ict_conf * 0.60 + np.clip(ml_conf, 0, 1) * 0.40
-                # ICT strong (>=3) but ML borderline — allow with penalty
+                    ml_conf  = np.clip((0.5 - ml_prob) * 2.0, 0, 1)
+                    confidence = ict_conf * 0.60 + ml_conf * 0.40
                 elif ict_sell >= 3 and ml_prob < 0.48:
                     signal = -1
                     ict_conf = min(ict_sell / 4.0, 1.0)
-                    confidence = ict_conf * 0.70
+                    confidence = ict_conf * 0.65
 
             # ===== TECH INDICATOR BONUS =====
             if signal == 1:
@@ -148,21 +141,15 @@ class SignalGenerator:
                 if adx > 35:
                     confidence += 0.03
 
-            # ===== ICT BONUS (increased weight — ICT is now core) =====
+            # ===== ICT BONUS (higher weight since ICT is now core) =====
             if signal == 1:
-                if ict_buy >= 4:
-                    confidence += 0.15
-                elif ict_buy >= 3:
-                    confidence += 0.10
-                elif ict_buy >= 2:
-                    confidence += 0.05
+                if ict_buy >= 4:   confidence += 0.15
+                elif ict_buy >= 3: confidence += 0.10
+                elif ict_buy >= 2: confidence += 0.05
             elif signal == -1:
-                if ict_sell >= 4:
-                    confidence += 0.15
-                elif ict_sell >= 3:
-                    confidence += 0.10
-                elif ict_sell >= 2:
-                    confidence += 0.05
+                if ict_sell >= 4:   confidence += 0.15
+                elif ict_sell >= 3: confidence += 0.10
+                elif ict_sell >= 2: confidence += 0.05
 
             # ===== PENALTY for conflicting signals =====
             if signal == 1 and ict_sell >= 2:

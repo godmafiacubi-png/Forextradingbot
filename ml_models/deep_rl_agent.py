@@ -293,6 +293,8 @@ class ShapedRewardCalculator:
         self.peak_equity = 0
         self.consecutive_wins = 0
         self.consecutive_losses = 0
+        self.high_spread_symbols = {'XAUUSDm', 'BTCUSDm'}  # penalize extra
+        self._current_symbol = None
 
     def calculate_trade_reward(self, pnl, pnl_pct, equity, hold_bars, regime, rr_ratio=1.5):
         reward = 0.0
@@ -300,13 +302,13 @@ class ShapedRewardCalculator:
         if pnl > 0:
             self.consecutive_wins += 1
             self.consecutive_losses = 0
-            # Prop firm: reward only if R:R was good
+            # Prop firm: reward quality of trade, not just outcome
             if rr_ratio >= 2.0:
-                reward += 2.0 + min(pnl_pct * 20, 5.0)   # excellent RR
+                reward += 2.0 + min(pnl_pct * 20, 5.0)
             elif rr_ratio >= 1.5:
-                reward += 1.0 + min(pnl_pct * 20, 5.0)   # acceptable RR
+                reward += 1.0 + min(pnl_pct * 20, 5.0)
             else:
-                reward += 0.3   # profit but bad RR = not a good trade
+                reward += 0.3  # profit but poor R:R = don't encourage
         else:
             self.consecutive_losses += 1
             self.consecutive_wins = 0
@@ -324,15 +326,24 @@ class ShapedRewardCalculator:
             if dd > 0.05: reward -= dd * 10
             elif dd > 0.02: reward -= dd * 5
 
-        if hold_bars > 24: reward -= (hold_bars - 24) * 0.02   # penalize holding too long (opportunity cost)
-        if hold_bars > 48: reward -= (hold_bars - 48) * 0.05   # cumulative extra penalty for very long holds
+        if hold_bars > 24: reward -= (hold_bars - 24) * 0.02
+        if hold_bars > 48: reward -= (hold_bars - 48) * 0.05
         if self.consecutive_wins >= 3: reward += 0.3 * min(self.consecutive_wins - 2, 5)
         if self.consecutive_losses >= 2: reward -= 0.5 * min(self.consecutive_losses - 1, 5)
 
         if regime == 'TRENDING' and pnl > 0: reward += 0.5
         elif regime == 'RANGING' and pnl > 0: reward += 0.3
         elif regime == 'VOLATILE' and pnl < 0: reward -= 0.3
-        elif regime == 'QUIET': reward -= 0.2   # penalize trades in QUIET market
+        elif regime == 'QUIET': reward -= 0.2  # NEW: penalize trading in quiet market
+
+        # Extra penalty for high-spread symbols that barely profit
+        effective_symbol = symbol if symbol is not None else self._current_symbol
+        if effective_symbol in self.high_spread_symbols:
+            # Tiny win on expensive spread = not worth it (threshold in account currency)
+            if 0 < pnl < 5.0:
+                reward -= 0.5
+            elif pnl <= 0:
+                reward -= 0.3  # extra loss penalty
 
         return np.clip(reward, -10, 10)
 
@@ -569,6 +580,10 @@ class DeepRLTradingAgent:
         return power
 
     def get_rl_adjustment(self, state, base_signal, base_confidence, symbol=''):
+        """
+        v8.0: RL is CONFIRMER ONLY — never changes signal direction.
+        Only adjusts confidence up or down.
+        """
         rl_action = self.select_action(state)
         self.action_counts[rl_action] += 1
 
@@ -577,27 +592,27 @@ class DeepRLTradingAgent:
 
         rl_power = self._get_rl_power()
 
-        # RL เป็น CONFIRMER เท่านั้น — ห้ามเปลี่ยน direction
-        adj_signal = base_signal  # signal ไม่เปลี่ยน
+        # Signal NEVER changes — RL only touches confidence
+        adj_signal = base_signal
 
-        if rl_action == 0:  # RL says HOLD
-            penalty = rl_power * 0.20   # reduce confidence max 20%
+        if base_signal == 0:
+            adj_conf = base_confidence
+            source = 'rl_pass_no_signal'
+        elif rl_action == 0:
+            # RL says HOLD — penalize confidence
+            penalty = rl_power * 0.20
             adj_conf = base_confidence * (1.0 - penalty)
             source = 'rl_hold_penalty'
         elif (rl_action == 1 and base_signal == 1) or (rl_action == 2 and base_signal == -1):
-            # RL agrees with base signal
-            boost = 1.0 + (rl_power * 0.15)   # boost max 15%
+            # RL agrees with base signal — boost confidence
+            boost = 1.0 + (rl_power * 0.15)
             adj_conf = min(base_confidence * boost, 1.0)
             source = 'rl_confirm'
-        elif (rl_action == 1 and base_signal == -1) or (rl_action == 2 and base_signal == 1):
-            # RL disagrees — penalty but don't flip
-            penalty = rl_power * 0.35   # reduce confidence max 35%
+        else:
+            # RL disagrees — penalize confidence but do NOT flip direction
+            penalty = rl_power * 0.35
             adj_conf = base_confidence * (1.0 - penalty)
             source = 'rl_disagree_penalty'
-        else:
-            # base_signal == 0 or other
-            adj_conf = base_confidence
-            source = 'rl_pass'
 
         # Log RL influence
         if base_confidence > 0 and abs(adj_conf - base_confidence) > 0.01:
@@ -615,7 +630,7 @@ class DeepRLTradingAgent:
             symbol, {}).get('regime', 'QUIET')
         self.total_trades += 1
 
-    def record_trade_close(self, symbol, next_state, pnl, pnl_pct, equity=0, rr_ratio=1.5):
+    def record_trade_close(self, symbol, next_state, pnl, pnl_pct, equity=0):
         if symbol not in self.open_states:
             return
 
@@ -627,8 +642,9 @@ class DeepRLTradingAgent:
         if pnl > 0:
             self.total_wins += 1
 
+        self.reward_calculator._current_symbol = symbol
         reward = self.reward_calculator.calculate_trade_reward(
-            pnl, pnl_pct, equity, hold_bars, regime, rr_ratio=rr_ratio)
+            pnl, pnl_pct, equity, hold_bars, regime, symbol=symbol)
         self.total_reward += reward
 
         n_buf = self.n_step_buffers[symbol]
