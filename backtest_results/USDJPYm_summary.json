@@ -1,0 +1,110 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 17841.55,
+  "total_return": 78.42,
+  "total_pnl": 3413.25,
+  "total_trades": 45,
+  "win_count": 32,
+  "loss_count": 13,
+  "win_rate": 0.7111111111111111,
+  "avg_pnl": 75.85,
+  "avg_win": 233.48,
+  "avg_loss": -312.15,
+  "best_trade": 564.51,
+  "worst_trade": -619.41,
+  "gross_profit": 7471.26,
+  "gross_loss": 4058.01,
+  "profit_factor": 1.84,
+  "expectancy": 75.85,
+  "rr_realized": 0.75,
+  "max_drawdown": 716.12,
+  "max_drawdown_pct": 3.86,
+  "max_consec_win": 6,
+  "max_consec_loss": 2,
+  "sharpe_ratio": 10.39,
+  "sortino_ratio": 79.91,
+  "calmar_ratio": 20.32,
+  "avg_duration_bars": 8.4,
+  "exit_reasons": {
+    "SL": 42,
+    "TP": 3
+  },
+  "buy_pnl": 4500.9,
+  "sell_pnl": -1087.65,
+  "buy_win_rate": 0.8182,
+  "sell_win_rate": 0.4167,
+  "blocked_trades": {
+    "low_adx": 81,
+    "htf": 92,
+    "session": 26,
+    "low_conf": 36,
+    "m30": 43,
+    "pullback": 44,
+    "max_per_sym": 5,
+    "cooldown": 1
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": -168.52,
+      "trades": 2,
+      "wins": 1,
+      "win_rate": 0.5,
+      "return_pct": -1.6852000000000003
+    },
+    {
+      "month": "2025-11",
+      "pnl": 467.5199999999999,
+      "trades": 7,
+      "wins": 5,
+      "win_rate": 0.7142857142857143,
+      "return_pct": 4.675199999999999
+    },
+    {
+      "month": "2025-12",
+      "pnl": 211.0,
+      "trades": 5,
+      "wins": 3,
+      "win_rate": 0.6,
+      "return_pct": 2.11
+    },
+    {
+      "month": "2026-01",
+      "pnl": 474.44000000000005,
+      "trades": 9,
+      "wins": 6,
+      "win_rate": 0.6666666666666666,
+      "return_pct": 4.744400000000001
+    },
+    {
+      "month": "2026-02",
+      "pnl": 1786.14,
+      "trades": 11,
+      "wins": 9,
+      "win_rate": 0.8181818181818182,
+      "return_pct": 17.861400000000003
+    },
+    {
+      "month": "2026-03",
+      "pnl": 1020.07,
+      "trades": 6,
+      "wins": 5,
+      "win_rate": 0.8333333333333334,
+      "return_pct": 10.2007
+    },
+    {
+      "month": "2026-04",
+      "pnl": -377.4,
+      "trades": 5,
+      "wins": 3,
+      "win_rate": 0.6,
+      "return_pct": -3.7739999999999996
+    }
+  ],
+  "m30_stats": {
+    "confirm": 6,
+    "against": 43,
+    "neutral": 39,
+    "boost_total": 0
+  }
+}

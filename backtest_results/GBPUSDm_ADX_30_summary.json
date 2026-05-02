@@ -1,0 +1,101 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 10815.69,
+  "total_return": 8.16,
+  "total_pnl": 470.62,
+  "total_trades": 24,
+  "win_count": 19,
+  "loss_count": 5,
+  "win_rate": 0.7916666666666666,
+  "avg_pnl": 19.61,
+  "avg_win": 38.52,
+  "avg_loss": -52.24,
+  "best_trade": 66.66,
+  "worst_trade": -53.45,
+  "gross_profit": 731.81,
+  "gross_loss": 261.19,
+  "profit_factor": 2.8,
+  "expectancy": 19.61,
+  "rr_realized": 0.74,
+  "max_drawdown": 109.1,
+  "max_drawdown_pct": 1.01,
+  "max_consec_win": 6,
+  "max_consec_loss": 2,
+  "sharpe_ratio": 12.41,
+  "sortino_ratio": 58.99,
+  "calmar_ratio": 8.06,
+  "avg_duration_bars": 9.1,
+  "exit_reasons": {
+    "SL": 16,
+    "TP": 8
+  },
+  "buy_pnl": -11.97,
+  "sell_pnl": 482.59,
+  "buy_win_rate": 0.5556,
+  "sell_win_rate": 0.9333,
+  "blocked_trades": {
+    "low_adx": 96,
+    "low_confidence": 148,
+    "htf_filter": 54,
+    "pullback_filter": 19,
+    "session_filter": 16,
+    "max_per_symbol": 13
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 44.04,
+      "trades": 2,
+      "wins": 2,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2025-11",
+      "pnl": 25.160000000000004,
+      "trades": 4,
+      "wins": 3,
+      "win_rate": 0.75
+    },
+    {
+      "month": "2025-12",
+      "pnl": 36.92,
+      "trades": 1,
+      "wins": 1,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-01",
+      "pnl": 186.02,
+      "trades": 4,
+      "wins": 4,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-02",
+      "pnl": 97.22,
+      "trades": 7,
+      "wins": 5,
+      "win_rate": 0.7142857142857143
+    },
+    {
+      "month": "2026-03",
+      "pnl": 0.0799999999999983,
+      "trades": 4,
+      "wins": 2,
+      "win_rate": 0.5
+    },
+    {
+      "month": "2026-04",
+      "pnl": 81.17999999999999,
+      "trades": 2,
+      "wins": 2,
+      "win_rate": 1.0
+    }
+  ],
+  "m30_stats": {
+    "confirm": 0,
+    "against": 0,
+    "neutral": 0,
+    "boost_total": 0
+  }
+}

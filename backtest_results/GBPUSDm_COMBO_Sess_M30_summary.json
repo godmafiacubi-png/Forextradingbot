@@ -1,0 +1,102 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 11209.49,
+  "total_return": 12.09,
+  "total_pnl": 746.76,
+  "total_trades": 30,
+  "win_count": 25,
+  "loss_count": 5,
+  "win_rate": 0.8333333333333334,
+  "avg_pnl": 24.89,
+  "avg_win": 40.7,
+  "avg_loss": -54.15,
+  "best_trade": 70.55,
+  "worst_trade": -58.03,
+  "gross_profit": 1017.52,
+  "gross_loss": 270.76,
+  "profit_factor": 3.76,
+  "expectancy": 24.89,
+  "rr_realized": 0.75,
+  "max_drawdown": 116.3,
+  "max_drawdown_pct": 1.04,
+  "max_consec_win": 11,
+  "max_consec_loss": 2,
+  "sharpe_ratio": 13.77,
+  "sortino_ratio": 60.27,
+  "calmar_ratio": 11.63,
+  "avg_duration_bars": 8.7,
+  "exit_reasons": {
+    "SL": 19,
+    "TP": 11
+  },
+  "buy_pnl": 182.88,
+  "sell_pnl": 563.88,
+  "buy_win_rate": 0.7143,
+  "sell_win_rate": 0.9375,
+  "blocked_trades": {
+    "htf_filter": 59,
+    "low_adx": 71,
+    "low_confidence": 148,
+    "max_per_symbol": 18,
+    "pullback_filter": 24,
+    "m30_against": 1,
+    "session_filter": 19
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 13.18,
+      "trades": 1,
+      "wins": 1,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2025-11",
+      "pnl": 154.13,
+      "trades": 7,
+      "wins": 6,
+      "win_rate": 0.8571428571428571
+    },
+    {
+      "month": "2025-12",
+      "pnl": 151.7,
+      "trades": 4,
+      "wins": 4,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-01",
+      "pnl": 193.82999999999998,
+      "trades": 4,
+      "wins": 4,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-02",
+      "pnl": 146.94,
+      "trades": 8,
+      "wins": 6,
+      "win_rate": 0.75
+    },
+    {
+      "month": "2026-03",
+      "pnl": 4.729999999999997,
+      "trades": 4,
+      "wins": 2,
+      "win_rate": 0.5
+    },
+    {
+      "month": "2026-04",
+      "pnl": 82.25,
+      "trades": 2,
+      "wins": 2,
+      "win_rate": 1.0
+    }
+  ],
+  "m30_stats": {
+    "confirm": 9,
+    "against": 1,
+    "neutral": 21,
+    "boost_total": 1.05
+  }
+}

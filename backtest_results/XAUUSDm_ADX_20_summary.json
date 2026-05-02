@@ -1,0 +1,95 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 12158.21,
+  "total_return": 21.58,
+  "total_pnl": 1162.49,
+  "total_trades": 46,
+  "win_count": 32,
+  "loss_count": 14,
+  "win_rate": 0.6956521739130435,
+  "avg_pnl": 25.27,
+  "avg_win": 68.95,
+  "avg_loss": -74.57,
+  "best_trade": 466.47,
+  "worst_trade": -182.22,
+  "gross_profit": 2206.41,
+  "gross_loss": 1043.92,
+  "profit_factor": 2.11,
+  "expectancy": 25.27,
+  "rr_realized": 0.92,
+  "max_drawdown": 389.42,
+  "max_drawdown_pct": 3.52,
+  "max_consec_win": 5,
+  "max_consec_loss": 3,
+  "sharpe_ratio": 4.77,
+  "sortino_ratio": 9.66,
+  "calmar_ratio": 6.13,
+  "avg_duration_bars": 10.1,
+  "exit_reasons": {
+    "SL": 35,
+    "TP": 11
+  },
+  "buy_pnl": 951.95,
+  "sell_pnl": 210.54,
+  "buy_win_rate": 0.8333,
+  "sell_win_rate": 0.6071,
+  "blocked_trades": {
+    "low_confidence": 142,
+    "pullback_filter": 24,
+    "htf_filter": 56,
+    "low_adx": 27,
+    "max_per_symbol": 18,
+    "cooldown": 1
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 132.69,
+      "trades": 5,
+      "wins": 4,
+      "win_rate": 0.8
+    },
+    {
+      "month": "2025-11",
+      "pnl": 71.62,
+      "trades": 6,
+      "wins": 4,
+      "win_rate": 0.6666666666666666
+    },
+    {
+      "month": "2025-12",
+      "pnl": 86.81,
+      "trades": 5,
+      "wins": 4,
+      "win_rate": 0.8
+    },
+    {
+      "month": "2026-01",
+      "pnl": 133.48000000000002,
+      "trades": 9,
+      "wins": 7,
+      "win_rate": 0.7777777777777778
+    },
+    {
+      "month": "2026-02",
+      "pnl": 534.1,
+      "trades": 8,
+      "wins": 4,
+      "win_rate": 0.5
+    },
+    {
+      "month": "2026-03",
+      "pnl": 174.08999999999997,
+      "trades": 12,
+      "wins": 8,
+      "win_rate": 0.6666666666666666
+    },
+    {
+      "month": "2026-04",
+      "pnl": 29.7,
+      "trades": 1,
+      "wins": 1,
+      "win_rate": 1.0
+    }
+  ]
+}

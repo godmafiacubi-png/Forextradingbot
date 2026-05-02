@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Backtest: XAUUSDm_Session_ON_best</title>
+<style>
+body { background:#0a0e17; color:#e1e5ea; font-family:'Segoe UI',monospace; padding:20px; }
+h1 { color:#00d4ff; } h2 { color:#7b8aa0; border-bottom:1px solid #1e2636; padding-bottom:8px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:15px 0; }
+.card { background:#141824; border-radius:8px; padding:15px; border:1px solid #1e2636; text-align:center; }
+.label { color:#7b8aa0; font-size:12px; text-transform:uppercase; }
+.value { font-size:20px; font-weight:bold; margin-top:4px; }
+.pos { color:#00e676; } .neg { color:#ff1744; } .neu { color:#00d4ff; }
+table { width:100%; border-collapse:collapse; margin:10px 0; }
+th { text-align:left; padding:8px; color:#7b8aa0; font-size:11px; border-bottom:1px solid #1e2636; }
+td { padding:8px; border-bottom:1px solid #111622; }
+img { max-width:100%; border-radius:8px; margin:10px 0; }
+</style></head><body>
+<h1>Backtest Report: XAUUSDm_Session_ON_best</h1>
+
+<div class="grid">
+<div class="card"><div class="label">Initial</div><div class="value neu">$10000.00</div></div>
+<div class="card"><div class="label">Final</div><div class="value pos">$11310.70</div></div>
+<div class="card"><div class="label">Return</div><div class="value pos">13.11%</div></div>
+<div class="card"><div class="label">Total P/L</div><div class="value pos">$776.03</div></div>
+</div>
+
+<div class="grid">
+<div class="card"><div class="label">Trades</div><div class="value">25</div></div>
+<div class="card"><div class="label">Win Rate</div><div class="value pos">68.0%</div></div>
+<div class="card"><div class="label">Profit Factor</div><div class="value pos">2.45</div></div>
+<div class="card"><div class="label">Sharpe</div><div class="value">5.32</div></div>
+<div class="card"><div class="label">Max DD</div><div class="value neg">3.77%</div></div>
+<div class="card"><div class="label">R:R Realized</div><div class="value">1:1.15</div></div>
+<div class="card"><div class="label">Expectancy</div><div class="value pos">$31.04</div></div>
+<div class="card"><div class="label">Avg Duration</div><div class="value">10 bars</div></div>
+</div>
+
+<h2>Equity Curve</h2><img src="XAUUSDm_Session_ON_best_equity.png">
+<h2>Drawdown</h2><img src="XAUUSDm_Session_ON_best_drawdown.png">
+<h2>Trade Distribution</h2><img src="XAUUSDm_Session_ON_best_trades.png">
+<h2>Monthly P/L</h2><img src="XAUUSDm_Session_ON_best_monthly.png">
+
+<h2>Exit Reasons</h2>
+<table><tr><th>Reason</th><th>Count</th><th>%</th></tr><tr><td>SL</td><td>19</td><td>76.0%</td></tr><tr><td>TP</td><td>6</td><td>24.0%</td></tr></table><h2>Monthly</h2><table><tr><th>Month</th><th>P/L</th><th>Trades</th><th>Win Rate</th></tr><tr><td>2025-10</td><td class='pos'>$59.66</td><td>3</td><td>66.7%</td></tr><tr><td>2025-11</td><td class='pos'>$60.27</td><td>5</td><td>60.0%</td></tr><tr><td>2026-01</td><td class='neg'>$-161.02</td><td>4</td><td>50.0%</td></tr><tr><td>2026-02</td><td class='pos'>$482.11</td><td>5</td><td>60.0%</td></tr><tr><td>2026-03</td><td class='pos'>$305.31</td><td>7</td><td>85.7%</td></tr><tr><td>2026-04</td><td class='pos'>$29.70</td><td>1</td><td>100.0%</td></tr></table></body></html>

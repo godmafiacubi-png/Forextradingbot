@@ -1,0 +1,50 @@
+{
+  "version": "2.2",
+  "use_cross_symbol": true,
+  "train_step": 3077,
+  "total_frames": 47129,
+  "total_trades": 62,
+  "total_wins": 35,
+  "total_reward": 7.830723243886453,
+  "global_epsilon": 0.9156801857106633,
+  "symbol_epsilon": {
+    "XAUUSDm": 0.9841115531182099,
+    "EURUSDm": 0.9821433300119734,
+    "USDJPYm": 0.9860837205593285,
+    "BTCUSDm": 0.9860837205593285,
+    "GBPUSDm": 0.9743097233989256
+  },
+  "action_counts": {
+    "1": 15882,
+    "2": 15573,
+    "0": 15671
+  },
+  "symbol_performance": {
+    "XAUUSDm": {
+      "trades": 8,
+      "wins": 7,
+      "total_pnl": -0.5000000000000142
+    },
+    "EURUSDm": {
+      "trades": 9,
+      "wins": 7,
+      "total_pnl": 74.22
+    },
+    "USDJPYm": {
+      "trades": 7,
+      "wins": 5,
+      "total_pnl": 22.86999999999999
+    },
+    "BTCUSDm": {
+      "trades": 7,
+      "wins": 7,
+      "total_pnl": 165.12
+    },
+    "GBPUSDm": {
+      "trades": 13,
+      "wins": 9,
+      "total_pnl": -298.45000000000005
+    }
+  },
+  "saved_at": "2026-05-02T10:21:39.458972"
+}

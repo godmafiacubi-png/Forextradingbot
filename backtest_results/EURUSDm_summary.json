@@ -1,0 +1,101 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 28765.31,
+  "total_return": 187.65,
+  "total_pnl": 12456.06,
+  "total_trades": 36,
+  "win_count": 32,
+  "loss_count": 4,
+  "win_rate": 0.8888888888888888,
+  "avg_pnl": 346.0,
+  "avg_win": 467.28,
+  "avg_loss": -624.21,
+  "best_trade": 1372.32,
+  "worst_trade": -678.87,
+  "gross_profit": 14952.89,
+  "gross_loss": 2496.83,
+  "profit_factor": 5.99,
+  "expectancy": 346.0,
+  "rr_realized": 0.75,
+  "max_drawdown": 1398.19,
+  "max_drawdown_pct": 6.07,
+  "max_consec_win": 12,
+  "max_consec_loss": 2,
+  "sharpe_ratio": 17.55,
+  "sortino_ratio": 130.83,
+  "calmar_ratio": 30.93,
+  "avg_duration_bars": 6.4,
+  "exit_reasons": {
+    "SL": 21,
+    "TP": 15
+  },
+  "buy_pnl": 4609.55,
+  "sell_pnl": 7846.51,
+  "buy_win_rate": 1.0,
+  "sell_win_rate": 0.8571,
+  "blocked_trades": {
+    "m30": 52,
+    "session": 53,
+    "pullback": 50,
+    "htf": 134,
+    "low_conf": 36,
+    "low_adx": 60,
+    "cooldown": 7
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 2123.3199999999997,
+      "trades": 5,
+      "wins": 5,
+      "win_rate": 1.0,
+      "return_pct": 21.233199999999997
+    },
+    {
+      "month": "2025-11",
+      "pnl": 2246.75,
+      "trades": 6,
+      "wins": 5,
+      "win_rate": 0.8333333333333334,
+      "return_pct": 22.4675
+    },
+    {
+      "month": "2025-12",
+      "pnl": 1022.9000000000001,
+      "trades": 3,
+      "wins": 3,
+      "win_rate": 1.0,
+      "return_pct": 10.229000000000001
+    },
+    {
+      "month": "2026-01",
+      "pnl": 2536.79,
+      "trades": 7,
+      "wins": 7,
+      "win_rate": 1.0,
+      "return_pct": 25.3679
+    },
+    {
+      "month": "2026-02",
+      "pnl": 2088.54,
+      "trades": 11,
+      "wins": 8,
+      "win_rate": 0.7272727272727273,
+      "return_pct": 20.885399999999997
+    },
+    {
+      "month": "2026-03",
+      "pnl": 2437.7599999999998,
+      "trades": 4,
+      "wins": 4,
+      "win_rate": 1.0,
+      "return_pct": 24.377599999999997
+    }
+  ],
+  "m30_stats": {
+    "confirm": 36,
+    "against": 52,
+    "neutral": 0,
+    "boost_total": 0
+  }
+}

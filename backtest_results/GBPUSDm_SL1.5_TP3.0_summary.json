@@ -1,0 +1,102 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 11480.37,
+  "total_return": 14.8,
+  "total_pnl": 812.45,
+  "total_trades": 32,
+  "win_count": 24,
+  "loss_count": 8,
+  "win_rate": 0.75,
+  "avg_pnl": 25.39,
+  "avg_win": 52.06,
+  "avg_loss": -54.64,
+  "best_trade": 114.75,
+  "worst_trade": -58.03,
+  "gross_profit": 1249.55,
+  "gross_loss": 437.1,
+  "profit_factor": 2.86,
+  "expectancy": 25.39,
+  "rr_realized": 0.95,
+  "max_drawdown": 118.32,
+  "max_drawdown_pct": 1.04,
+  "max_consec_win": 6,
+  "max_consec_loss": 2,
+  "sharpe_ratio": 13.1,
+  "sortino_ratio": 87.2,
+  "calmar_ratio": 14.26,
+  "avg_duration_bars": 7.4,
+  "exit_reasons": {
+    "SL": 26,
+    "TP": 6
+  },
+  "buy_pnl": 238.24,
+  "sell_pnl": 574.21,
+  "buy_win_rate": 0.7143,
+  "sell_win_rate": 0.7778,
+  "blocked_trades": {
+    "htf_filter": 59,
+    "low_adx": 71,
+    "low_confidence": 148,
+    "max_per_symbol": 16,
+    "pullback_filter": 24,
+    "session_filter": 19,
+    "cooldown": 1
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 58.730000000000004,
+      "trades": 2,
+      "wins": 2,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2025-11",
+      "pnl": 112.47,
+      "trades": 7,
+      "wins": 5,
+      "win_rate": 0.7142857142857143
+    },
+    {
+      "month": "2025-12",
+      "pnl": 168.59,
+      "trades": 4,
+      "wins": 4,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-01",
+      "pnl": 155.04,
+      "trades": 4,
+      "wins": 3,
+      "win_rate": 0.75
+    },
+    {
+      "month": "2026-02",
+      "pnl": 196.86,
+      "trades": 8,
+      "wins": 6,
+      "win_rate": 0.75
+    },
+    {
+      "month": "2026-03",
+      "pnl": 2.9299999999999997,
+      "trades": 5,
+      "wins": 2,
+      "win_rate": 0.4
+    },
+    {
+      "month": "2026-04",
+      "pnl": 117.83,
+      "trades": 2,
+      "wins": 2,
+      "win_rate": 1.0
+    }
+  ],
+  "m30_stats": {
+    "confirm": 0,
+    "against": 0,
+    "neutral": 0,
+    "boost_total": 0
+  }
+}

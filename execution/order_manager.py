@@ -1,0 +1,370 @@
+import MetaTrader5 as mt5
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class OrderManager:
+    """Execute and manage orders — trailing + news protection + partial close"""
+
+    def __init__(self, mt5_connector, max_open_trades=3, max_per_symbol=1):
+        self.mt5 = mt5_connector
+        self.max_open_trades = max_open_trades
+        self.max_per_symbol = max_per_symbol
+
+    def set_limits(self, max_open_trades, max_per_symbol=None):
+        self.max_open_trades = max_open_trades
+        if max_per_symbol is not None:
+            self.max_per_symbol = max_per_symbol
+
+    def _get_digits(self, symbol):
+        """ดึง digits ของ symbol สำหรับ round ราคา"""
+        try:
+            info = mt5.symbol_info(symbol)
+            if info:
+                return info.digits
+        except Exception:
+            pass
+        symbol_upper = symbol.upper()
+        if 'JPY' in symbol_upper:
+            return 3
+        elif 'XAU' in symbol_upper or 'GOLD' in symbol_upper:
+            return 2
+        elif 'BTC' in symbol_upper:
+            return 2
+        return 5
+
+    def _round_price(self, price, symbol):
+        """Round ราคาตาม digits ของ symbol"""
+        digits = self._get_digits(symbol)
+        return round(price, digits)
+
+    def _check_stop_level(self, symbol, price, sl, tp, order_type):
+        """เช็คว่า SL/TP อยู่ห่างจากราคาพอตาม broker stop level"""
+        try:
+            info = mt5.symbol_info(symbol)
+            if not info:
+                return sl, tp
+
+            stop_level = info.trade_stops_level
+            point = info.point
+
+            if stop_level <= 0 or point <= 0:
+                return sl, tp
+
+            min_distance = stop_level * point
+
+            if order_type == mt5.ORDER_TYPE_BUY or order_type == 0:
+                # BUY: SL ต้องต่ำกว่า price - min_distance
+                if sl > 0 and (price - sl) < min_distance:
+                    sl = price - min_distance
+                    logger.debug(f"[STOP_LEVEL] {symbol} BUY SL adjusted to {sl:.5f} (min_dist={min_distance:.5f})")
+                # TP ต้องสูงกว่า price + min_distance
+                if tp > 0 and (tp - price) < min_distance:
+                    tp = price + min_distance
+            else:
+                # SELL: SL ต้องสูงกว่า price + min_distance
+                if sl > 0 and (sl - price) < min_distance:
+                    sl = price + min_distance
+                    logger.debug(f"[STOP_LEVEL] {symbol} SELL SL adjusted to {sl:.5f}")
+                if tp > 0 and (price - tp) < min_distance:
+                    tp = price - min_distance
+
+            digits = info.digits
+            sl = round(sl, digits)
+            tp = round(tp, digits)
+            return sl, tp
+
+        except Exception:
+            return sl, tp
+
+    def can_open_trade(self, symbol):
+        try:
+            positions = mt5.positions_get()
+            if positions is None:
+                return True
+            if len(positions) >= self.max_open_trades:
+                return False
+            if len([p for p in positions if p.symbol == symbol]) >= self.max_per_symbol:
+                return False
+            return True
+        except Exception:
+            return False
+
+    def get_open_positions(self, symbol=None):
+        try:
+            positions = mt5.positions_get(symbol=symbol) if symbol else mt5.positions_get()
+            return positions if positions else []
+        except Exception:
+            return []
+
+    def place_order(self, symbol, order_type, volume, stop_loss, take_profit, comment=""):
+        try:
+            if not self.can_open_trade(symbol):
+                return None
+
+            si = self.mt5.get_symbol_info(symbol)
+            if si is None:
+                return None
+
+            price = si['ask'] if order_type == mt5.ORDER_TYPE_BUY else si['bid']
+            digits = self._get_digits(symbol)
+            stop_loss = round(stop_loss, digits)
+            take_profit = round(take_profit, digits)
+
+            # เช็ค stop level
+            stop_loss, take_profit = self._check_stop_level(symbol, price, stop_loss, take_profit, order_type)
+
+            if order_type == mt5.ORDER_TYPE_BUY:
+                if stop_loss >= price or take_profit <= price:
+                    logger.error(f"Invalid BUY SL/TP: price={price} sl={stop_loss} tp={take_profit}")
+                    return None
+            else:
+                if stop_loss <= price or take_profit >= price:
+                    logger.error(f"Invalid SELL SL/TP: price={price} sl={stop_loss} tp={take_profit}")
+                    return None
+
+            vol_min = si.get('volume_min', 0.01)
+            vol_max = si.get('volume_max', 100.0)
+            vol_step = si.get('volume_step', 0.01)
+            volume = max(min(volume, vol_max), vol_min)
+            volume = round(round(volume / vol_step) * vol_step, 2)
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL, "symbol": symbol,
+                "volume": volume, "type": order_type, "price": price,
+                "sl": stop_loss, "tp": take_profit, "deviation": 20,
+                "magic": 123456, "comment": comment,
+                "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+
+            result = mt5.order_send(request)
+            if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
+                error_msg = result.comment if result else 'None'
+                retcode = result.retcode if result else 0
+                logger.error(f"Order failed [{retcode}]: {error_msg}")
+                return None
+
+            d = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
+            logger.info(f"[TRADE] {d} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
+            return result.order
+        except Exception as e:
+            logger.error(f"Place order error: {e}")
+            return None
+
+    def modify_sl(self, ticket, new_sl):
+        """Modify SL — ใช้โดย SmartTrailingV2"""
+        try:
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                logger.warning(f"[MODIFY] #{ticket} not found")
+                return False
+
+            pos = position[0]
+            digits = self._get_digits(pos.symbol)
+            new_sl = round(new_sl, digits)
+
+            # เช็คว่า SL ใหม่ดีกว่าเดิม
+            if pos.type == 0:  # BUY
+                if new_sl <= pos.sl and pos.sl > 0:
+                    logger.debug(f"[MODIFY] #{ticket} BUY new_sl={new_sl:.{digits}f} <= old_sl={pos.sl:.{digits}f} SKIP")
+                    return False
+            else:  # SELL
+                if new_sl >= pos.sl and pos.sl > 0:
+                    logger.debug(f"[MODIFY] #{ticket} SELL new_sl={new_sl:.{digits}f} >= old_sl={pos.sl:.{digits}f} SKIP")
+                    return False
+
+            # เช็ค stop level
+            si = self.mt5.get_symbol_info(pos.symbol)
+            if si:
+                current_price = si['bid'] if pos.type == 0 else si['ask']
+                new_sl, _ = self._check_stop_level(pos.symbol, current_price, new_sl, pos.tp, pos.type)
+
+            return self._modify_sl(pos, new_sl)
+        except Exception as e:
+            logger.error(f"Modify SL error: {e}")
+            return False
+
+    def modify_sl_tp(self, ticket, new_sl=None, new_tp=None):
+        """Modify SL and/or TP"""
+        try:
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                return False
+
+            pos = position[0]
+            digits = self._get_digits(pos.symbol)
+            sl = round(new_sl, digits) if new_sl is not None else pos.sl
+            tp = round(new_tp, digits) if new_tp is not None else pos.tp
+
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "symbol": pos.symbol,
+                "position": pos.ticket,
+                "sl": sl,
+                "tp": tp,
+            }
+            result = mt5.order_send(request)
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"[MODIFY] #{ticket} {pos.symbol} SL={sl:.{digits}f} TP={tp:.{digits}f}")
+                return True
+            else:
+                error_msg = result.comment if result else 'None'
+                retcode = result.retcode if result else 0
+                logger.warning(f"[MODIFY] #{ticket} failed [{retcode}]: {error_msg}")
+                return False
+        except Exception as e:
+            logger.error(f"Modify SL/TP error: {e}")
+            return False
+
+    def _modify_sl(self, pos, new_sl):
+        """Internal: ส่ง SLTP request ไป MT5"""
+        try:
+            digits = self._get_digits(pos.symbol)
+            new_sl = round(new_sl, digits)
+
+            request = {
+                "action": mt5.TRADE_ACTION_SLTP,
+                "symbol": pos.symbol,
+                "position": pos.ticket,
+                "sl": new_sl,
+                "tp": pos.tp,
+            }
+            result = mt5.order_send(request)
+
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"[SL] #{pos.ticket} {pos.symbol} SL -> {new_sl:.{digits}f}")
+                return True
+            else:
+                error_msg = result.comment if result else 'None'
+                retcode = result.retcode if result else 0
+                logger.warning(f"[SL] #{pos.ticket} failed [{retcode}]: {error_msg}")
+                return False
+        except Exception as e:
+            logger.error(f"_modify_sl error: {e}")
+            return False
+
+    def partial_close(self, ticket, close_pct):
+        """Close a percentage of an open position"""
+        try:
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                return False
+
+            pos = position[0]
+            close_volume = round(pos.volume * close_pct, 2)
+
+            vol_min = 0.01
+            si = self.mt5.get_symbol_info(pos.symbol)
+            if si:
+                vol_min = si.get('volume_min', 0.01)
+                vol_step = si.get('volume_step', 0.01)
+                close_volume = max(round(round(close_volume / vol_step) * vol_step, 2), vol_min)
+
+            if close_volume < vol_min:
+                return False
+
+            if close_volume >= pos.volume:
+                return self.close_order(ticket)
+
+            order_type = mt5.ORDER_TYPE_SELL if pos.type == 0 else mt5.ORDER_TYPE_BUY
+            price = si['bid'] if pos.type == 0 else si['ask'] if si else 0
+
+            request = {
+                "action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol,
+                "volume": close_volume, "type": order_type,
+                "position": ticket, "price": price, "deviation": 20,
+                "magic": 123456, "comment": "partial_close",
+                "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_IOC,
+            }
+
+            result = mt5.order_send(request)
+            if result and result.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"[PARTIAL] #{ticket} {pos.symbol} closed {close_volume}/{pos.volume} lots ({close_pct:.0%})")
+                return True
+            else:
+                error_msg = result.comment if result else 'None'
+                logger.warning(f"[PARTIAL] #{ticket} failed: {error_msg}")
+                return False
+        except Exception as e:
+            logger.error(f"Partial close error: {e}")
+            return False
+
+    def apply_news_protection(self, symbol, action, atr_value):
+        try:
+            for pos in self.get_open_positions(symbol):
+                si = self.mt5.get_symbol_info(symbol)
+                if si is None:
+                    continue
+                cp = si['bid'] if pos.type == 0 else si['ask']
+                entry = pos.price_open
+
+                if action == 'FORCE_CLOSE':
+                    self.close_order(pos.ticket)
+                    continue
+
+                new_sl = None
+                if pos.type == 0:
+                    if action == 'BREAKEVEN':
+                        p = entry + atr_value * 0.05
+                        if p > pos.sl:
+                            new_sl = p
+                    elif action == 'LOCK_PROFIT':
+                        p = cp - atr_value * 0.3
+                        if p > pos.sl and p > entry:
+                            new_sl = p
+                    elif action == 'TIGHTEN_SL':
+                        d = cp - pos.sl
+                        p = cp - d * 0.5
+                        if p > pos.sl:
+                            new_sl = p
+                else:
+                    if action == 'BREAKEVEN':
+                        p = entry - atr_value * 0.05
+                        if p < pos.sl:
+                            new_sl = p
+                    elif action == 'LOCK_PROFIT':
+                        p = cp + atr_value * 0.3
+                        if p < pos.sl and p < entry:
+                            new_sl = p
+                    elif action == 'TIGHTEN_SL':
+                        d = pos.sl - cp
+                        p = cp + d * 0.5
+                        if p < pos.sl:
+                            new_sl = p
+
+                if new_sl and self._modify_sl(pos, new_sl):
+                    logger.info(f"[NEWS] {action} #{pos.ticket} {symbol} SL -> {new_sl:.5f}")
+        except Exception as e:
+            logger.error(f"News protection error: {e}")
+
+    def close_order(self, ticket):
+        try:
+            position = mt5.positions_get(ticket=ticket)
+            if not position:
+                return False
+            pos = position[0]
+            ot = mt5.ORDER_TYPE_SELL if pos.type == 0 else mt5.ORDER_TYPE_BUY
+            si = self.mt5.get_symbol_info(pos.symbol)
+            price = si['bid'] if pos.type == 0 else si['ask']
+            r = mt5.order_send({
+                "action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol,
+                "volume": pos.volume, "type": ot, "position": ticket,
+                "price": price, "deviation": 20, "magic": 123456,
+                "comment": "close", "type_time": mt5.ORDER_TIME_GTC,
+                "type_filling": mt5.ORDER_FILLING_IOC,
+            })
+            if r and r.retcode == mt5.TRADE_RETCODE_DONE:
+                logger.info(f"[CLOSE] #{ticket} {pos.symbol}")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Close error: {e}")
+            return False
+
+    def close_all(self, symbol=None):
+        closed = 0
+        for pos in self.get_open_positions(symbol):
+            if self.close_order(pos.ticket):
+                closed += 1
+        return closed

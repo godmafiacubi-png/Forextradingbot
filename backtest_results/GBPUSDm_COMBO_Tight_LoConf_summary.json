@@ -1,0 +1,95 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 12357.87,
+  "total_return": 23.58,
+  "total_pnl": 1205.34,
+  "total_trades": 67,
+  "win_count": 37,
+  "loss_count": 30,
+  "win_rate": 0.5522388059701493,
+  "avg_pnl": 17.99,
+  "avg_win": 77.51,
+  "avg_loss": -55.42,
+  "best_trade": 121.35,
+  "worst_trade": -61.04,
+  "gross_profit": 2868.0,
+  "gross_loss": 1662.66,
+  "profit_factor": 1.72,
+  "expectancy": 17.99,
+  "rr_realized": 1.4,
+  "max_drawdown": 249.67,
+  "max_drawdown_pct": 2.39,
+  "max_consec_win": 5,
+  "max_consec_loss": 4,
+  "sharpe_ratio": 8.85,
+  "sortino_ratio": 74.14,
+  "calmar_ratio": 9.87,
+  "avg_duration_bars": 5.7,
+  "exit_reasons": {
+    "SL": 42,
+    "TP": 25
+  },
+  "buy_pnl": 156.97,
+  "sell_pnl": 1048.37,
+  "buy_win_rate": 0.4688,
+  "sell_win_rate": 0.6286,
+  "blocked_trades": {
+    "low_adx": 130,
+    "htf_filter": 83,
+    "pullback_filter": 36,
+    "low_confidence": 18,
+    "max_per_symbol": 34,
+    "cooldown": 3
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 84.94000000000001,
+      "trades": 3,
+      "wins": 2,
+      "win_rate": 0.6666666666666666
+    },
+    {
+      "month": "2025-11",
+      "pnl": 19.15999999999999,
+      "trades": 10,
+      "wins": 5,
+      "win_rate": 0.5
+    },
+    {
+      "month": "2025-12",
+      "pnl": 248.14000000000001,
+      "trades": 9,
+      "wins": 6,
+      "win_rate": 0.6666666666666666
+    },
+    {
+      "month": "2026-01",
+      "pnl": -56.05000000000002,
+      "trades": 12,
+      "wins": 4,
+      "win_rate": 0.3333333333333333
+    },
+    {
+      "month": "2026-02",
+      "pnl": 479.85,
+      "trades": 16,
+      "wins": 10,
+      "win_rate": 0.625
+    },
+    {
+      "month": "2026-03",
+      "pnl": 248.39999999999998,
+      "trades": 13,
+      "wins": 7,
+      "win_rate": 0.5384615384615384
+    },
+    {
+      "month": "2026-04",
+      "pnl": 180.89999999999998,
+      "trades": 4,
+      "wins": 3,
+      "win_rate": 0.75
+    }
+  ]
+}

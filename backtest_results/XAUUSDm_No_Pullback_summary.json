@@ -1,0 +1,101 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 12075.31,
+  "total_return": 20.75,
+  "total_pnl": 1367.5,
+  "total_trades": 36,
+  "win_count": 26,
+  "loss_count": 10,
+  "win_rate": 0.7222222222222222,
+  "avg_pnl": 37.99,
+  "avg_win": 80.0,
+  "avg_loss": -71.24,
+  "best_trade": 466.47,
+  "worst_trade": -182.22,
+  "gross_profit": 2079.94,
+  "gross_loss": 712.44,
+  "profit_factor": 2.92,
+  "expectancy": 37.99,
+  "rr_realized": 1.12,
+  "max_drawdown": 389.43,
+  "max_drawdown_pct": 3.67,
+  "max_consec_win": 12,
+  "max_consec_loss": 3,
+  "sharpe_ratio": 6.45,
+  "sortino_ratio": 16.65,
+  "calmar_ratio": 5.65,
+  "avg_duration_bars": 8.9,
+  "exit_reasons": {
+    "SL": 24,
+    "TP": 12
+  },
+  "buy_pnl": 716.88,
+  "sell_pnl": 650.62,
+  "buy_win_rate": 0.8571,
+  "sell_win_rate": 0.6364,
+  "blocked_trades": {
+    "low_adx": 53,
+    "low_confidence": 143,
+    "htf_filter": 50,
+    "session_filter": 20,
+    "max_per_symbol": 12,
+    "cooldown": 1
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": -24.120000000000005,
+      "trades": 4,
+      "wins": 2,
+      "win_rate": 0.5
+    },
+    {
+      "month": "2025-11",
+      "pnl": 60.269999999999996,
+      "trades": 5,
+      "wins": 3,
+      "win_rate": 0.6
+    },
+    {
+      "month": "2025-12",
+      "pnl": 144.55,
+      "trades": 3,
+      "wins": 3,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-01",
+      "pnl": -42.839999999999975,
+      "trades": 5,
+      "wins": 3,
+      "win_rate": 0.6
+    },
+    {
+      "month": "2026-02",
+      "pnl": 409.56000000000006,
+      "trades": 7,
+      "wins": 4,
+      "win_rate": 0.5714285714285714
+    },
+    {
+      "month": "2026-03",
+      "pnl": 774.5,
+      "trades": 9,
+      "wins": 9,
+      "win_rate": 1.0
+    },
+    {
+      "month": "2026-04",
+      "pnl": 45.58,
+      "trades": 3,
+      "wins": 2,
+      "win_rate": 0.6666666666666666
+    }
+  ],
+  "m30_stats": {
+    "confirm": 0,
+    "against": 0,
+    "neutral": 0,
+    "boost_total": 0
+  }
+}

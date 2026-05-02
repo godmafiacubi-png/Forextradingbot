@@ -1,0 +1,95 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 18675.46,
+  "total_return": 86.75,
+  "total_pnl": 4841.37,
+  "total_trades": 83,
+  "win_count": 55,
+  "loss_count": 28,
+  "win_rate": 0.6626506024096386,
+  "avg_pnl": 58.33,
+  "avg_win": 154.22,
+  "avg_loss": -130.02,
+  "best_trade": 307.44,
+  "worst_trade": -188.84,
+  "gross_profit": 8481.85,
+  "gross_loss": 3640.48,
+  "profit_factor": 2.33,
+  "expectancy": 58.33,
+  "rr_realized": 1.19,
+  "max_drawdown": 461.02,
+  "max_drawdown_pct": 4.1,
+  "max_consec_win": 7,
+  "max_consec_loss": 3,
+  "sharpe_ratio": 9.39,
+  "sortino_ratio": 99.17,
+  "calmar_ratio": 21.15,
+  "avg_duration_bars": 5.7,
+  "exit_reasons": {
+    "SL": 59,
+    "TP": 24
+  },
+  "buy_pnl": 1787.53,
+  "sell_pnl": 3053.84,
+  "buy_win_rate": 0.6786,
+  "sell_win_rate": 0.6545,
+  "blocked_trades": {
+    "low_confidence": 52,
+    "max_per_symbol": 40,
+    "pullback_filter": 53,
+    "htf_filter": 99,
+    "low_adx": 71,
+    "cooldown": 3
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 297.02,
+      "trades": 9,
+      "wins": 6,
+      "win_rate": 0.6666666666666666
+    },
+    {
+      "month": "2025-11",
+      "pnl": 377.53000000000003,
+      "trades": 14,
+      "wins": 8,
+      "win_rate": 0.5714285714285714
+    },
+    {
+      "month": "2025-12",
+      "pnl": 301.46000000000004,
+      "trades": 9,
+      "wins": 5,
+      "win_rate": 0.5555555555555556
+    },
+    {
+      "month": "2026-01",
+      "pnl": 1302.77,
+      "trades": 15,
+      "wins": 11,
+      "win_rate": 0.7333333333333333
+    },
+    {
+      "month": "2026-02",
+      "pnl": 1262.75,
+      "trades": 21,
+      "wins": 14,
+      "win_rate": 0.6666666666666666
+    },
+    {
+      "month": "2026-03",
+      "pnl": 1272.91,
+      "trades": 13,
+      "wins": 10,
+      "win_rate": 0.7692307692307693
+    },
+    {
+      "month": "2026-04",
+      "pnl": 26.930000000000007,
+      "trades": 2,
+      "wins": 1,
+      "win_rate": 0.5
+    }
+  ]
+}

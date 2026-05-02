@@ -1,0 +1,109 @@
+{
+  "initial_balance": 10000,
+  "final_balance": 14783.54,
+  "total_return": 47.84,
+  "total_pnl": 2825.27,
+  "total_trades": 37,
+  "win_count": 30,
+  "loss_count": 7,
+  "win_rate": 0.8108108108108109,
+  "avg_pnl": 76.36,
+  "avg_win": 147.47,
+  "avg_loss": -228.4,
+  "best_trade": 478.12,
+  "worst_trade": -302.84,
+  "gross_profit": 4424.09,
+  "gross_loss": 1598.82,
+  "profit_factor": 2.77,
+  "expectancy": 76.36,
+  "rr_realized": 0.65,
+  "max_drawdown": 963.83,
+  "max_drawdown_pct": 8.4,
+  "max_consec_win": 16,
+  "max_consec_loss": 4,
+  "sharpe_ratio": 12.36,
+  "sortino_ratio": 99.55,
+  "calmar_ratio": 5.69,
+  "avg_duration_bars": 6.2,
+  "exit_reasons": {
+    "SL": 30,
+    "TP": 7
+  },
+  "buy_pnl": 211.62,
+  "sell_pnl": 2613.65,
+  "buy_win_rate": 0.8571,
+  "sell_win_rate": 0.8,
+  "blocked_trades": {
+    "htf": 100,
+    "low_adx": 68,
+    "m30": 31,
+    "low_conf": 81,
+    "pullback": 38,
+    "session": 33,
+    "cooldown": 3
+  },
+  "monthly": [
+    {
+      "month": "2025-10",
+      "pnl": 344.88,
+      "trades": 3,
+      "wins": 2,
+      "win_rate": 0.6666666666666666,
+      "return_pct": 3.4488
+    },
+    {
+      "month": "2025-11",
+      "pnl": -274.37,
+      "trades": 8,
+      "wins": 4,
+      "win_rate": 0.5,
+      "return_pct": -2.7437
+    },
+    {
+      "month": "2025-12",
+      "pnl": 102.79,
+      "trades": 1,
+      "wins": 1,
+      "win_rate": 1.0,
+      "return_pct": 1.0279
+    },
+    {
+      "month": "2026-01",
+      "pnl": 386.24,
+      "trades": 5,
+      "wins": 4,
+      "win_rate": 0.8,
+      "return_pct": 3.8624
+    },
+    {
+      "month": "2026-02",
+      "pnl": 1052.84,
+      "trades": 14,
+      "wins": 13,
+      "win_rate": 0.9285714285714286,
+      "return_pct": 10.5284
+    },
+    {
+      "month": "2026-03",
+      "pnl": 1107.05,
+      "trades": 5,
+      "wins": 5,
+      "win_rate": 1.0,
+      "return_pct": 11.0705
+    },
+    {
+      "month": "2026-04",
+      "pnl": 105.84,
+      "trades": 1,
+      "wins": 1,
+      "win_rate": 1.0,
+      "return_pct": 1.0584
+    }
+  ],
+  "m30_stats": {
+    "confirm": 8,
+    "against": 31,
+    "neutral": 29,
+    "boost_total": 0
+  }
+}
