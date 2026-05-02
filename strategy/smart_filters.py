@@ -23,36 +23,22 @@ class SignalQualityScorer:
     def calculate(self, signal, confidence, ict_score, adx, rsi, htf,
                   m30_confirmed=True, structure=0, vol_spike=0):
         score = 0
-        score += min(confidence * 25, 25)
-        score += min(ict_score * 5, 20)
-        if adx > 40:
-            score += 15
-        elif adx > 30:
-            score += 12
-        elif adx > 25:
-            score += 8
-        elif adx > 20:
-            score += 5
-        if signal == 1 and htf == 1:
-            score += 15
-        elif signal == -1 and htf == -1:
-            score += 15
-        elif htf == 0:
-            score += 5
-        if m30_confirmed:
-            score += 10
-        else:
-            score -= 5
-        if signal == 1 and structure == 1:
-            score += 5
-        elif signal == -1 and structure == -1:
-            score += 5
-        if vol_spike:
-            score += 5
-        if signal == 1 and 30 < rsi < 55:
-            score += 5
-        elif signal == -1 and 45 < rsi < 70:
-            score += 5
+        score += min(confidence * 20, 20)      # confidence: max 20 (was 25)
+        score += min(ict_score * 7, 30)        # ICT: max 30 (was ict_score*5, max 20)
+        if adx > 40:    score += 15
+        elif adx > 30:  score += 12
+        elif adx > 25:  score += 8
+        elif adx > 20:  score += 5
+        if signal == 1 and htf == 1:    score += 15
+        elif signal == -1 and htf == -1: score += 15
+        elif htf == 0:  score += 5
+        if m30_confirmed: score += 10
+        else:             score -= 5
+        if signal == 1 and structure == 1:   score += 5
+        elif signal == -1 and structure == -1: score += 5
+        if vol_spike: score += 5
+        if signal == 1 and 30 < rsi < 55:    score += 5
+        elif signal == -1 and 45 < rsi < 70: score += 5
         return max(0, min(100, int(score))), {}
 
     def get_grade(self, score):

@@ -37,9 +37,19 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 # ============================================================
 # SYMBOLS & TIMEFRAMES
 # ============================================================
+# ============================================================
+# ACTIVE SYMBOLS — Prop Firm Mode v8.0
+# Disabled by backtest evidence:
+#   GBPUSDm:  R:R realized 0.96x (GBPUSDm_COMBO_24h_Aggress_report) — below 1.0x
+#   USDJPYm:  R:R realized 0.56x (USDJPYm_COMBO_Full_Stack_report)  — far below target
+#   BTCUSDm:  Insufficient sample, high spread cost
+# Active:
+#   EURUSDm:  Core forex pair, low spread, high liquidity
+#   XAUUSDm:  Strong trends, good R:R potential
+# ============================================================
 SYMBOLS = {
-    'FOREX': ['EURUSDm', 'GBPUSDm', 'USDJPYm'],
-    'CRYPTO': ['BTCUSDm'],
+    'FOREX': ['EURUSDm'],
+    'CRYPTO': [],      # disabled — kept for get_symbol_config() compatibility
     'GOLD': ['XAUUSDm'],
 }
 
@@ -101,7 +111,7 @@ UPDATE_INTERVAL = 60
 # ============================================================
 ML_THRESHOLD_BUY = 0.53
 ML_THRESHOLD_SELL = 0.47
-MIN_CONFIDENCE = 0.38
+MIN_CONFIDENCE = 0.55        # was 0.38 — Prop Firm requires high confidence
 SIGNAL_COOLDOWN = 2
 
 # ============================================================
@@ -109,8 +119,8 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 POSITION_SIZING_METHOD = 'ATR'
 ACCOUNT_RISK_PERCENT = 0.7
-MAX_DAILY_RISK_PERCENT = 5.0
-MAX_OPEN_TRADES = 5
+MAX_DAILY_RISK_PERCENT = 3.0 # was 5.0 — tighter daily risk
+MAX_OPEN_TRADES = 3          # was 5 — focus, not diversify
 MAX_TRADES_PER_SYMBOL = 1
 
 # ============================================================
@@ -137,7 +147,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 50    # DD<10% optimal: เพิ่มจาก 40 → 50 กรองสัญญาณคุณภาพต่ำออก
+MIN_QUALITY_SCORE = 70    # was 50 — A grade minimum
 
 # ============================================================
 # SESSION FILTER — True = เปิดกรอง / False = ปิดกรอง (เทรดได้ทุกเวลา)
@@ -218,25 +228,26 @@ MIN_TRAINING_SAMPLES = 100
 SYMBOL_SETTINGS = {
     'EURUSDm': {
         'sl_atr_mult': 1.5,
-        'tp_atr_mult': 3.0,
-        'risk_pct': 0.7,
-        'min_confidence': 0.40,
-        'min_adx': 24,
-        'min_ict_score': 1,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
-        'session_filter': False,
+        'tp_atr_mult': 3.5,        # was 3.0 — better R:R
+        'risk_pct': 0.5,
+        'min_confidence': 0.55,    # was 0.38
+        'min_adx': 25,             # was 22
+        'min_ict_score': 2,        # was 1
+        'ml_buy_threshold': 0.55,  # was 0.53
+        'ml_sell_threshold': 0.45, # was 0.47
+        'pullback_rsi_buy_max': 58,
+        'pullback_rsi_sell_min': 42,
+        'session_filter': True,    # was False — only London/NY
         'use_m30': True,
         'm30_confirmation': 'both',
         'm30_conf_boost': 0.12,
         'm30_conf_penalty': 0.10,
-        'require_htf': False,
+        'require_htf': True,       # was False
         'require_pullback': True,
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
+    # DISABLED: see SYMBOLS list
     'GBPUSDm': {
         'sl_atr_mult': 2.0,
         'tp_atr_mult': 3.0,
@@ -258,6 +269,7 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
+    # DISABLED: see SYMBOLS list
     'USDJPYm': {
         'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.0,
@@ -279,6 +291,7 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
+    # DISABLED: see SYMBOLS list
     'BTCUSDm': {
         'sl_atr_mult': 1.8,
         'tp_atr_mult': 3.0,
@@ -302,24 +315,24 @@ SYMBOL_SETTINGS = {
     },
     'XAUUSDm': {
         'sl_atr_mult': 1.5,
-        'tp_atr_mult': 3.0,
-        'risk_pct': 0.8,
-        'min_confidence': 0.40,
-        'min_adx': 24,
-        'min_ict_score': 2,
-        'ml_buy_threshold': 0.53,
-        'ml_sell_threshold': 0.47,
+        'tp_atr_mult': 3.5,        # was 3.0
+        'risk_pct': 0.5,           # was 0.8
+        'min_confidence': 0.55,    # was 0.38
+        'min_adx': 22,
+        'min_ict_score': 2,        # was 1
+        'ml_buy_threshold': 0.55,  # was 0.53
+        'ml_sell_threshold': 0.45, # was 0.47
         'pullback_rsi_buy_max': 60,
         'pullback_rsi_sell_min': 40,
-        'session_filter': False,
+        'session_filter': True,    # only London/NY for Gold
         'use_m30': True,
         'm30_confirmation': 'both',
         'm30_conf_boost': 0.12,
         'm30_conf_penalty': 0.10,
-        'require_htf': False,
+        'require_htf': True,       # was False
         'require_pullback': True,
         'max_per_symbol': 1,
-        'max_lot': 2.0,
+        'max_lot': 0.5,            # was 2.0 — conservative on Gold
     },
 }
 
