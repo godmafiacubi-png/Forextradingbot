@@ -293,8 +293,10 @@ class ShapedRewardCalculator:
         self.peak_equity = 0
         self.consecutive_wins = 0
         self.consecutive_losses = 0
+        self.high_spread_symbols = {'XAUUSDm', 'BTCUSDm'}  # penalize extra
+        self._current_symbol = None
 
-    def calculate_trade_reward(self, pnl, pnl_pct, equity, hold_bars, regime):
+    def calculate_trade_reward(self, pnl, pnl_pct, equity, hold_bars, regime, symbol=None):
         reward = 0.0
 
         if pnl > 0:
@@ -325,6 +327,15 @@ class ShapedRewardCalculator:
         if regime == 'TRENDING' and pnl > 0: reward += 0.5
         elif regime == 'RANGING' and pnl > 0: reward += 0.3
         elif regime == 'VOLATILE' and pnl < 0: reward -= 0.3
+
+        # Extra penalty for high-spread symbols that barely profit
+        effective_symbol = symbol if symbol is not None else self._current_symbol
+        if effective_symbol in self.high_spread_symbols:
+            # Tiny win on expensive spread = not worth it (threshold in account currency)
+            if 0 < pnl < 5.0:
+                reward -= 0.5
+            elif pnl <= 0:
+                reward -= 0.3  # extra loss penalty
 
         return np.clip(reward, -10, 10)
 
@@ -639,8 +650,9 @@ class DeepRLTradingAgent:
         if pnl > 0:
             self.total_wins += 1
 
+        self.reward_calculator._current_symbol = symbol
         reward = self.reward_calculator.calculate_trade_reward(
-            pnl, pnl_pct, equity, hold_bars, regime)
+            pnl, pnl_pct, equity, hold_bars, regime, symbol=symbol)
         self.total_reward += reward
 
         n_buf = self.n_step_buffers[symbol]
