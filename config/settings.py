@@ -101,7 +101,7 @@ UPDATE_INTERVAL = 60
 # ============================================================
 ML_THRESHOLD_BUY = 0.53
 ML_THRESHOLD_SELL = 0.47
-MIN_CONFIDENCE = 0.38
+MIN_CONFIDENCE = 0.55
 SIGNAL_COOLDOWN = 2
 
 # ============================================================
@@ -137,7 +137,12 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 50    # DD<10% optimal: เพิ่มจาก 40 → 50 กรองสัญญาณคุณภาพต่ำออก
+MIN_QUALITY_SCORE = 55    # เพิ่มจาก 50 → 55 กรองสัญญาณคุณภาพต่ำออก (A/B grade only)
+
+# ============================================================
+# QUIET MARKET KILL SWITCH
+# ============================================================
+QUIET_MARKET_ADX_THRESHOLD = 25  # block trades when regime=QUIET and ADX below this
 
 # ============================================================
 # SESSION FILTER — True = เปิดกรอง / False = ปิดกรอง (เทรดได้ทุกเวลา)
@@ -220,7 +225,7 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.7,
-        'min_confidence': 0.40,
+        'min_confidence': 0.50,
         'min_adx': 24,
         'min_ict_score': 1,
         'ml_buy_threshold': 0.54,
@@ -237,55 +242,14 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
+    # RISK REDUCED: underperforming / insufficient sample
     'GBPUSDm': {
         'sl_atr_mult': 2.0,
         'tp_atr_mult': 3.0,
-        'risk_pct': 0.7,
-        'min_confidence': 0.40,
+        'risk_pct': 0.3,
+        'min_confidence': 0.52,
         'min_adx': 24,
         'min_ict_score': 1,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
-        'session_filter': False,
-        'use_m30': True,
-        'm30_confirmation': 'both',
-        'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
-        'require_htf': False,
-        'require_pullback': True,
-        'max_per_symbol': 1,
-        'max_lot': 2.0,
-    },
-    'USDJPYm': {
-        'sl_atr_mult': 1.5,
-        'tp_atr_mult': 3.0,
-        'risk_pct': 0.7,
-        'min_confidence': 0.40,
-        'min_adx': 24,
-        'min_ict_score': 1,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
-        'session_filter': False,
-        'use_m30': True,
-        'm30_confirmation': 'both',
-        'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
-        'require_htf': False,
-        'require_pullback': True,
-        'max_per_symbol': 1,
-        'max_lot': 2.0,
-    },
-    'BTCUSDm': {
-        'sl_atr_mult': 1.8,
-        'tp_atr_mult': 3.0,
-        'risk_pct': 0.6,
-        'min_confidence': 0.40,
-        'min_adx': 25,
-        'min_ict_score': 2,
         'ml_buy_threshold': 0.54,
         'ml_sell_threshold': 0.46,
         'pullback_rsi_buy_max': 60,
@@ -300,11 +264,54 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 0.5,
     },
+    'USDJPYm': {
+        'sl_atr_mult': 1.5,
+        'tp_atr_mult': 3.0,
+        'risk_pct': 0.7,
+        'min_confidence': 0.50,
+        'min_adx': 24,
+        'min_ict_score': 1,
+        'ml_buy_threshold': 0.54,
+        'ml_sell_threshold': 0.46,
+        'pullback_rsi_buy_max': 60,
+        'pullback_rsi_sell_min': 40,
+        'session_filter': False,
+        'use_m30': True,
+        'm30_confirmation': 'both',
+        'm30_conf_boost': 0.12,
+        'm30_conf_penalty': 0.10,
+        'require_htf': False,
+        'require_pullback': True,
+        'max_per_symbol': 1,
+        'max_lot': 2.0,
+    },
+    # RISK REDUCED: underperforming / insufficient sample
+    'BTCUSDm': {
+        'sl_atr_mult': 1.8,
+        'tp_atr_mult': 3.0,
+        'risk_pct': 0.3,
+        'min_confidence': 0.50,
+        'min_adx': 25,
+        'min_ict_score': 2,
+        'ml_buy_threshold': 0.54,
+        'ml_sell_threshold': 0.46,
+        'pullback_rsi_buy_max': 60,
+        'pullback_rsi_sell_min': 40,
+        'session_filter': False,
+        'use_m30': True,
+        'm30_confirmation': 'both',
+        'm30_conf_boost': 0.12,
+        'm30_conf_penalty': 0.10,
+        'require_htf': False,
+        'require_pullback': True,
+        'max_per_symbol': 1,
+        'max_lot': 0.2,
+    },
     'XAUUSDm': {
         'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.8,
-        'min_confidence': 0.40,
+        'min_confidence': 0.50,
         'min_adx': 24,
         'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
