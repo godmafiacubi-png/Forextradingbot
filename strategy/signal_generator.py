@@ -98,7 +98,7 @@ class SignalGenerator:
                 if ml_prob > ml_threshold_buy:
                     signal = 1
                     # Confidence = ICT weight 60% + ML weight 40%
-                    ict_conf = min(ict_buy / 4.0, 1.0)   # max at 4 ICT signals
+                    ict_conf = min(ict_buy / 4.0, 1.0)   # confidence caps at 4 ICT signals (5-6 get same cap; extra benefit via ICT bonus section)
                     ml_conf  = (ml_prob - 0.5) * 2.0
                     confidence = ict_conf * 0.60 + np.clip(ml_conf, 0, 1) * 0.40
                 # ICT strong (>=3) but ML borderline — allow with penalty

@@ -283,7 +283,7 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
-    'BTCUSDm': {  # Disabled: see SYMBOLS list above (insufficient sample)
+    'BTCUSDm': {  # Disabled: see SYMBOLS list above (insufficient backtest sample size — high overfit risk)
         'sl_atr_mult': 1.8,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.6,

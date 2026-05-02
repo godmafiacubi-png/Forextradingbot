@@ -324,8 +324,8 @@ class ShapedRewardCalculator:
             if dd > 0.05: reward -= dd * 10
             elif dd > 0.02: reward -= dd * 5
 
-        if hold_bars > 24: reward -= (hold_bars - 24) * 0.02   # penalize holding too long
-        if hold_bars > 48: reward -= (hold_bars - 48) * 0.05   # extra penalty
+        if hold_bars > 24: reward -= (hold_bars - 24) * 0.02   # penalize holding too long (opportunity cost)
+        if hold_bars > 48: reward -= (hold_bars - 48) * 0.05   # cumulative extra penalty for very long holds
         if self.consecutive_wins >= 3: reward += 0.3 * min(self.consecutive_wins - 2, 5)
         if self.consecutive_losses >= 2: reward -= 0.5 * min(self.consecutive_losses - 1, 5)
 
