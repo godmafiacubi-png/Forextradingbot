@@ -150,6 +150,11 @@ REQUIRE_ICT_CONFLUENCE = True
 MIN_QUALITY_SCORE = 70    # was 50 — A grade minimum
 
 # ============================================================
+# QUIET MARKET KILL SWITCH
+# ============================================================
+QUIET_MARKET_ADX_THRESHOLD = 25  # block trades when regime=QUIET and ADX below this
+
+# ============================================================
 # SESSION FILTER — True = เปิดกรอง / False = ปิดกรอง (เทรดได้ทุกเวลา)
 # ============================================================
 SESSION_FILTER_ENABLED = False
@@ -250,6 +255,28 @@ SYMBOL_SETTINGS = {
     # DISABLED: see SYMBOLS list
     'GBPUSDm': {
         'sl_atr_mult': 2.0,
+        'tp_atr_mult': 3.0,
+        'risk_pct': 0.3,
+        'min_confidence': 0.52,
+        'min_adx': 24,
+        'min_ict_score': 1,
+        'ml_buy_threshold': 0.54,
+        'ml_sell_threshold': 0.46,
+        'pullback_rsi_buy_max': 60,
+        'pullback_rsi_sell_min': 40,
+        'session_filter': False,
+        'use_m30': True,
+        'm30_confirmation': 'both',
+        'm30_conf_boost': 0.12,
+        'm30_conf_penalty': 0.10,
+        'require_htf': False,
+        'require_pullback': True,
+        'max_per_symbol': 1,
+        'max_lot': 2.0,
+    },
+    # DISABLED: see SYMBOLS list
+    'USDJPYm': {
+        'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.7,
         'min_confidence': 0.40,
