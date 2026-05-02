@@ -37,9 +37,13 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 # ============================================================
 # SYMBOLS & TIMEFRAMES
 # ============================================================
+# Prop Firm mode: focus on best 3 pairs only
+# GBPUSDm disabled: R:R Realized 0.96x (backtest GBPUSDm_COMBO_24h_Aggress_report.html) — below 1.0x threshold
+# USDJPYm disabled: R:R Realized 0.56x (backtest USDJPYm_COMBO_Full_Stack_report.html) — far below threshold
+# BTCUSDm disabled: insufficient sample size (overfit risk)
 SYMBOLS = {
-    'FOREX': ['EURUSDm', 'GBPUSDm', 'USDJPYm'],
-    'CRYPTO': ['BTCUSDm'],
+    'FOREX': ['EURUSDm'],          # เดิม: ['EURUSDm', 'GBPUSDm', 'USDJPYm']
+    'CRYPTO': [],                   # เดิม: ['BTCUSDm'] — insufficient sample
     'GOLD': ['XAUUSDm'],
 }
 
@@ -109,8 +113,8 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 POSITION_SIZING_METHOD = 'ATR'
 ACCOUNT_RISK_PERCENT = 0.7
-MAX_DAILY_RISK_PERCENT = 5.0
-MAX_OPEN_TRADES = 5
+MAX_DAILY_RISK_PERCENT = 3.0
+MAX_OPEN_TRADES = 3
 MAX_TRADES_PER_SYMBOL = 1
 
 # ============================================================
@@ -137,7 +141,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 50    # DD<10% optimal: เพิ่มจาก 40 → 50 กรองสัญญาณคุณภาพต่ำออก
+MIN_QUALITY_SCORE = 70    # เดิม 50 — Prop Firm: A grade minimum (70+)
 
 # ============================================================
 # SESSION FILTER — True = เปิดกรอง / False = ปิดกรอง (เทรดได้ทุกเวลา)
@@ -218,11 +222,11 @@ MIN_TRAINING_SAMPLES = 100
 SYMBOL_SETTINGS = {
     'EURUSDm': {
         'sl_atr_mult': 1.5,
-        'tp_atr_mult': 3.0,
+        'tp_atr_mult': 3.5,
         'risk_pct': 0.7,
-        'min_confidence': 0.40,
-        'min_adx': 24,
-        'min_ict_score': 1,
+        'min_confidence': 0.55,
+        'min_adx': 25,
+        'min_ict_score': 2,
         'ml_buy_threshold': 0.54,
         'ml_sell_threshold': 0.46,
         'pullback_rsi_buy_max': 60,
@@ -232,12 +236,12 @@ SYMBOL_SETTINGS = {
         'm30_confirmation': 'both',
         'm30_conf_boost': 0.12,
         'm30_conf_penalty': 0.10,
-        'require_htf': False,
+        'require_htf': True,
         'require_pullback': True,
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
-    'GBPUSDm': {
+    'GBPUSDm': {  # Disabled: see SYMBOLS list above (R:R 0.96x)
         'sl_atr_mult': 2.0,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.7,
@@ -258,7 +262,7 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
-    'USDJPYm': {
+    'USDJPYm': {  # Disabled: see SYMBOLS list above (R:R 0.56x)
         'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.7,
@@ -279,7 +283,7 @@ SYMBOL_SETTINGS = {
         'max_per_symbol': 1,
         'max_lot': 2.0,
     },
-    'BTCUSDm': {
+    'BTCUSDm': {  # Disabled: see SYMBOLS list above (insufficient sample)
         'sl_atr_mult': 1.8,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.6,
@@ -302,10 +306,10 @@ SYMBOL_SETTINGS = {
     },
     'XAUUSDm': {
         'sl_atr_mult': 1.5,
-        'tp_atr_mult': 3.0,
+        'tp_atr_mult': 3.5,
         'risk_pct': 0.8,
-        'min_confidence': 0.40,
-        'min_adx': 24,
+        'min_confidence': 0.55,
+        'min_adx': 22,
         'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
         'ml_sell_threshold': 0.47,
@@ -316,7 +320,7 @@ SYMBOL_SETTINGS = {
         'm30_confirmation': 'both',
         'm30_conf_boost': 0.12,
         'm30_conf_penalty': 0.10,
-        'require_htf': False,
+        'require_htf': True,
         'require_pullback': True,
         'max_per_symbol': 1,
         'max_lot': 2.0,

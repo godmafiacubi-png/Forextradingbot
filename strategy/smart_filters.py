@@ -23,8 +23,11 @@ class SignalQualityScorer:
     def calculate(self, signal, confidence, ict_score, adx, rsi, htf,
                   m30_confirmed=True, structure=0, vol_spike=0):
         score = 0
-        score += min(confidence * 25, 25)
-        score += min(ict_score * 5, 20)
+        # Confidence max 20 (เดิม 25)
+        score += min(confidence * 20, 20)
+
+        # ICT max 30 (เดิม 20) — ICT เป็น core ตอนนี้
+        score += min(ict_score * 7, 30)   # เดิม ict_score * 5, max 20
         if adx > 40:
             score += 15
         elif adx > 30:
