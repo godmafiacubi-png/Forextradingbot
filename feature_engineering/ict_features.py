@@ -98,38 +98,74 @@ class ICTFeatures:
 
         return self.df
 
-    def identify_market_structure(self, lookback=5):
-        """Identify Market Structure - HH/HL/LH/LL"""
-        h = pd.Series(self.df['h'].values)
-        l = pd.Series(self.df['l'].values)
+    def identify_market_structure(self, lookback=5, depth=10, deviation=5):
+        """
+        Improved: Zigzag-based Pivot Structure
+        Uses true swing pivot detection instead of rolling window.
+        Ported from Pine Script signalLib zigzag logic.
 
-        swing_high = h.rolling(lookback, center=True).max()
-        swing_low = l.rolling(lookback, center=True).min()
+        Parameters:
+            lookback   : kept for backward compatibility (unused internally)
+            depth      : bars to look left/right for pivot confirmation (default 10)
+            deviation  : minimum % price move to confirm a new swing (default 5)
+        """
+        h = self.df['h'].values
+        l = self.df['l'].values
+        n = len(h)
 
-        is_swing_high = (h == swing_high).astype(int)
-        is_swing_low = (l == swing_low).astype(int)
+        # --- True Pivot High/Low Detection ---
+        pivot_high = np.zeros(n)
+        pivot_low  = np.zeros(n)
 
-        hh = h.rolling(lookback).max()
-        ll = l.rolling(lookback).min()
+        for i in range(depth, n - depth):
+            window_h = h[i - depth: i + depth + 1]
+            window_l = l[i - depth: i + depth + 1]
+            if h[i] == max(window_h):
+                pivot_high[i] = h[i]
+            if l[i] == min(window_l):
+                pivot_low[i] = l[i]
 
-        prev_hh = hh.shift(lookback)
-        prev_ll = ll.shift(lookback)
+        # --- Zigzag Direction (inspired by signalLib) ---
+        zz_direction = np.zeros(n)
+        last_ph  = np.nan
+        last_pl  = np.nan
+        current_dir = 0
 
-        structure = pd.Series(0, index=self.df.index)
-        structure[hh > prev_hh] = 1
-        structure[ll < prev_ll] = -1
+        for i in range(n):
+            if pivot_high[i] > 0:
+                if not np.isnan(last_pl) and last_pl > 0:
+                    move_pct = (pivot_high[i] - last_pl) / (last_pl + 1e-10) * 100
+                    if move_pct >= deviation:
+                        current_dir = 1
+                last_ph = pivot_high[i]
 
-        self.df['structure'] = structure.values
-        self.df['swing_high'] = is_swing_high.values
-        self.df['swing_low'] = is_swing_low.values
+            if pivot_low[i] > 0:
+                if not np.isnan(last_ph) and last_ph > 0:
+                    move_pct = (last_ph - pivot_low[i]) / (last_ph + 1e-10) * 100
+                    if move_pct >= deviation:
+                        current_dir = -1
+                last_pl = pivot_low[i]
 
-        self.df['bos_bullish'] = ((h > hh.shift(1)) & (structure.shift(1) <= 0)).astype(int).values
-        self.df['bos_bearish'] = ((l < ll.shift(1)) & (structure.shift(1) >= 0)).astype(int).values
+            zz_direction[i] = current_dir
 
-        # Change of Character (CHoCH) — structure reversal
-        prev_struct = structure.shift(1)
-        self.df['choch_bullish'] = ((prev_struct == -1) & (structure == 1)).astype(int).values
-        self.df['choch_bearish'] = ((prev_struct == 1) & (structure == -1)).astype(int).values
+        zz_series  = pd.Series(zz_direction)
+        prev_dir   = zz_series.shift(1).fillna(0)
+
+        # --- BOS: direction change (more reliable than rolling window) ---
+        self.df['bos_bullish']   = ((zz_series == 1)  & (prev_dir != 1)).astype(int).values
+        self.df['bos_bearish']   = ((zz_series == -1) & (prev_dir != -1)).astype(int).values
+
+        # --- CHoCH: full reversal ---
+        self.df['choch_bullish'] = ((zz_series == 1)  & (prev_dir == -1)).astype(int).values
+        self.df['choch_bearish'] = ((zz_series == -1) & (prev_dir ==  1)).astype(int).values
+
+        # --- Structure score (same column name, backward compatible) ---
+        self.df['structure']   = zz_direction.astype(int)
+        self.df['swing_high']  = (pivot_high > 0).astype(int)
+        self.df['swing_low']   = (pivot_low  > 0).astype(int)
+
+        # --- New column: zigzag direction for signal_generator filter ---
+        self.df['zz_direction'] = zz_direction.astype(int)
 
         return self.df
 

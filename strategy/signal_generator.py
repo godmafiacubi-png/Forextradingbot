@@ -151,6 +151,20 @@ class SignalGenerator:
                 elif ict_sell >= 3: confidence += 0.10
                 elif ict_sell >= 2: confidence += 0.05
 
+            # ===== ZIGZAG DIRECTION ALIGNMENT FILTER =====
+            # If signal aligns with zigzag swing direction → small confidence boost
+            # If signal conflicts with zigzag swing direction → confidence penalty
+            zz_dir = int(df.iloc[i].get('zz_direction', 0))
+            if zz_dir != 0:
+                if signal == 1 and zz_dir == -1:
+                    confidence *= 0.72   # Counter-trend buy in bearish swing — penalise
+                elif signal == -1 and zz_dir == 1:
+                    confidence *= 0.72   # Counter-trend sell in bullish swing — penalise
+                elif signal == 1 and zz_dir == 1:
+                    confidence = min(confidence + 0.04, 1.0)   # Aligned with bullish zigzag
+                elif signal == -1 and zz_dir == -1:
+                    confidence = min(confidence + 0.04, 1.0)   # Aligned with bearish zigzag
+
             # ===== PENALTY for conflicting signals =====
             if signal == 1 and ict_sell >= 2:
                 confidence *= 0.6
