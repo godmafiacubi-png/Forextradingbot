@@ -19,6 +19,14 @@ import xgboost as xgb
 from .regime_aware_ensemble import RegimeAwareEnsemble
 from .retrain_engine import RetrainEngine
 
+try:
+    from config.settings import ML_LABEL_LOOKAHEAD, ML_LABEL_THRESHOLD, ML_LABEL_MIN_BALANCE, ML_LABEL_MAX_BALANCE
+except ImportError:
+    ML_LABEL_LOOKAHEAD = 3
+    ML_LABEL_THRESHOLD = 0.0001
+    ML_LABEL_MIN_BALANCE = 0.30
+    ML_LABEL_MAX_BALANCE = 0.70
+
 logger = logging.getLogger(__name__)
 
 
@@ -216,10 +224,10 @@ class EnsembleModel:
                 )
                 return None, None
 
-            LABEL_LOOKAHEAD = 3
-            LABEL_THRESHOLD = 0.0001
-            MIN_CLASS_BALANCE = 0.30
-            MAX_CLASS_BALANCE = 0.70
+            LABEL_LOOKAHEAD = ML_LABEL_LOOKAHEAD
+            LABEL_THRESHOLD = ML_LABEL_THRESHOLD
+            MIN_CLASS_BALANCE = ML_LABEL_MIN_BALANCE
+            MAX_CLASS_BALANCE = ML_LABEL_MAX_BALANCE
             future_close = df[close_col].shift(-LABEL_LOOKAHEAD)
             threshold = df[close_col] * LABEL_THRESHOLD
             y = (future_close > df[close_col] + threshold).astype(int).values
