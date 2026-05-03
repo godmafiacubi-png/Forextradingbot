@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import logging
 
+pd.set_option('future.no_silent_downcasting', True)
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,13 +43,13 @@ class ICTFeatures:
 
         # Demand OB at bar i = bar (i-1) was bearish + bar i is the bullish impulse
         ob_demand = (
-            pd.Series(bearish_candle).shift(1).fillna(False).astype(bool) &
+            pd.Series(bearish_candle).shift(1).fillna(False).infer_objects(copy=False).astype(bool) &
             pd.Series(bullish_impulse)
         ).astype(int)
 
         # Supply OB at bar i = bar (i-1) was bullish + bar i is the bearish impulse
         ob_supply = (
-            pd.Series(bullish_candle).shift(1).fillna(False).astype(bool) &
+            pd.Series(bullish_candle).shift(1).fillna(False).infer_objects(copy=False).astype(bool) &
             pd.Series(bearish_impulse)
         ).astype(int)
 

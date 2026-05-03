@@ -135,8 +135,8 @@ MAX_DRAWDOWN_PERCENT = 10.0
 # ============================================================
 # FILTERS
 # ============================================================
-MIN_ADX = 24
-MIN_ICT_SCORE = 2
+MIN_ADX = 22
+MIN_ICT_SCORE = 1
 PULLBACK_RSI_BUY_MAX = 60
 PULLBACK_RSI_SELL_MIN = 40
 
@@ -147,7 +147,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 70    # was 50 — A grade minimum
+MIN_QUALITY_SCORE = 65    # was 50 — A grade minimum
 
 # ============================================================
 # QUIET MARKET KILL SWITCH
@@ -243,18 +243,18 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.5,        # was 3.0 — better R:R
         'risk_pct': 0.5,
-        'min_confidence': 0.55,    # was 0.38
-        'min_adx': 25,             # was 22
-        'min_ict_score': 2,        # was 1
-        'ml_buy_threshold': 0.55,  # was 0.53
-        'ml_sell_threshold': 0.45, # was 0.47
+        'min_confidence': 0.52,    # was 0.55
+        'min_adx': 23,             # was 25
+        'min_ict_score': 1,        # was 2
+        'ml_buy_threshold': 0.53,  # was 0.55
+        'ml_sell_threshold': 0.47, # was 0.45
         'pullback_rsi_buy_max': 58,
         'pullback_rsi_sell_min': 42,
         'session_filter': True,    # was False — only London/NY
         'use_m30': True,
         'm30_confirmation': 'both',
         'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
+        'm30_conf_penalty': 0.08,  # was 0.10
         'require_htf': True,       # was False
         'require_pullback': True,
         'max_per_symbol': 1,
@@ -265,18 +265,18 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 2.0,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.3,
-        'min_confidence': 0.52,
-        'min_adx': 24,
+        'min_confidence': 0.50,    # was 0.52
+        'min_adx': 22,             # was 24
         'min_ict_score': 1,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
+        'ml_buy_threshold': 0.53,  # was 0.54
+        'ml_sell_threshold': 0.47, # was 0.46
+        'pullback_rsi_buy_max': 62,  # was 60
+        'pullback_rsi_sell_min': 38, # was 40
         'session_filter': False,
         'use_m30': True,
-        'm30_confirmation': 'both',
-        'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
+        'm30_confirmation': 'signal',  # was 'both'
+        'm30_conf_boost': 0.10,        # was 0.12
+        'm30_conf_penalty': 0.08,      # was 0.10
         'require_htf': False,
         'require_pullback': True,
         'max_per_symbol': 1,
@@ -288,17 +288,17 @@ SYMBOL_SETTINGS = {
         'tp_atr_mult': 3.0,
         'risk_pct': 0.7,
         'min_confidence': 0.40,
-        'min_adx': 24,
+        'min_adx': 22,             # was 24
         'min_ict_score': 1,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
+        'ml_buy_threshold': 0.53,  # was 0.54
+        'ml_sell_threshold': 0.47, # was 0.46
+        'pullback_rsi_buy_max': 62,  # was 60
+        'pullback_rsi_sell_min': 38, # was 40
         'session_filter': False,
         'use_m30': True,
-        'm30_confirmation': 'both',
-        'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
+        'm30_confirmation': 'signal',  # was 'both'
+        'm30_conf_boost': 0.10,        # was 0.12
+        'm30_conf_penalty': 0.08,      # was 0.10
         'require_htf': False,
         'require_pullback': True,
         'max_per_symbol': 1,
@@ -310,17 +310,17 @@ SYMBOL_SETTINGS = {
         'tp_atr_mult': 3.0,
         'risk_pct': 0.7,
         'min_confidence': 0.40,
-        'min_adx': 24,
+        'min_adx': 22,             # was 24
         'min_ict_score': 1,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
+        'ml_buy_threshold': 0.53,  # was 0.54
+        'ml_sell_threshold': 0.47, # was 0.46
+        'pullback_rsi_buy_max': 62,  # was 60
+        'pullback_rsi_sell_min': 38, # was 40
         'session_filter': False,
         'use_m30': True,
-        'm30_confirmation': 'both',
-        'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
+        'm30_confirmation': 'signal',  # was 'both'
+        'm30_conf_boost': 0.10,        # was 0.12
+        'm30_conf_penalty': 0.08,      # was 0.10
         'require_htf': False,
         'require_pullback': True,
         'max_per_symbol': 1,
@@ -329,41 +329,41 @@ SYMBOL_SETTINGS = {
     # DISABLED: see SYMBOLS list
     'BTCUSDm': {
         'sl_atr_mult': 1.8,
-        'tp_atr_mult': 3.0,
-        'risk_pct': 0.6,
+        'tp_atr_mult': 3.5,        # was 3.0
+        'risk_pct': 0.5,           # was 0.6
         'min_confidence': 0.40,
-        'min_adx': 25,
-        'min_ict_score': 2,
-        'ml_buy_threshold': 0.54,
-        'ml_sell_threshold': 0.46,
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
+        'min_adx': 20,             # was 25
+        'min_ict_score': 1,        # was 2
+        'ml_buy_threshold': 0.53,  # was 0.54
+        'ml_sell_threshold': 0.47, # was 0.46
+        'pullback_rsi_buy_max': 65,  # was 60
+        'pullback_rsi_sell_min': 35, # was 40
         'session_filter': False,
         'use_m30': True,
-        'm30_confirmation': 'both',
-        'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
+        'm30_confirmation': 'signal',  # was 'both'
+        'm30_conf_boost': 0.10,        # was 0.12
+        'm30_conf_penalty': 0.08,      # was 0.10
         'require_htf': False,
-        'require_pullback': True,
+        'require_pullback': False,     # was True
         'max_per_symbol': 1,
-        'max_lot': 0.5,
+        'max_lot': 0.3,               # was 0.5
     },
     'XAUUSDm': {
         'sl_atr_mult': 1.5,
         'tp_atr_mult': 3.5,        # was 3.0
         'risk_pct': 0.5,           # was 0.8
-        'min_confidence': 0.55,    # was 0.38
-        'min_adx': 22,
-        'min_ict_score': 2,        # was 1
-        'ml_buy_threshold': 0.55,  # was 0.53
-        'ml_sell_threshold': 0.45, # was 0.47
-        'pullback_rsi_buy_max': 60,
-        'pullback_rsi_sell_min': 40,
+        'min_confidence': 0.50,    # was 0.55
+        'min_adx': 20,             # was 22
+        'min_ict_score': 1,        # was 2
+        'ml_buy_threshold': 0.53,  # was 0.55
+        'ml_sell_threshold': 0.47, # was 0.45
+        'pullback_rsi_buy_max': 62,  # was 58
+        'pullback_rsi_sell_min': 38, # was 42
         'session_filter': True,    # only London/NY for Gold
         'use_m30': True,
-        'm30_confirmation': 'both',
+        'm30_confirmation': 'signal',  # was 'both'
         'm30_conf_boost': 0.12,
-        'm30_conf_penalty': 0.10,
+        'm30_conf_penalty': 0.08,      # was 0.10
         'require_htf': True,       # was False
         'require_pullback': True,
         'max_per_symbol': 1,
