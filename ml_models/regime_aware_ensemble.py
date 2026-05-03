@@ -25,6 +25,14 @@ except ImportError:
     SKLEARN_AVAILABLE = False
     logger.warning("scikit-learn / xgboost not available")
 
+try:
+    from config.settings import ML_LABEL_LOOKAHEAD, ML_LABEL_THRESHOLD, ML_LABEL_MIN_BALANCE, ML_LABEL_MAX_BALANCE
+except ImportError:
+    ML_LABEL_LOOKAHEAD = 3
+    ML_LABEL_THRESHOLD = 0.0001
+    ML_LABEL_MIN_BALANCE = 0.30
+    ML_LABEL_MAX_BALANCE = 0.70
+
 
 # ============================================================
 # Symbol Embedding (Cross-Symbol Transfer)
@@ -264,8 +272,11 @@ class RegimeAwareEnsemble:
     # ----------------------------------------------------------
 
     def _get_feature_columns(self, df) -> List[str]:
-        import pandas as pd
-        exclude = {"time", "o", "h", "l", "c", "v", "signal", "confidence"}
+        exclude = {
+            "time", "o", "h", "l", "c", "v", "signal", "confidence",
+            "regime", "market_regime", "htf_regime",
+            "symbol", "date", "datetime", "timestamp", "index",
+        }
         return [
             col for col in df.columns
             if col not in exclude and np.issubdtype(df[col].dtype, np.number)
@@ -310,10 +321,10 @@ class RegimeAwareEnsemble:
             if "c" not in df.columns:
                 return None, None
 
-            LABEL_LOOKAHEAD = 3
-            LABEL_THRESHOLD = 0.0001
-            MIN_CLASS_BALANCE = 0.30
-            MAX_CLASS_BALANCE = 0.70
+            LABEL_LOOKAHEAD = ML_LABEL_LOOKAHEAD
+            LABEL_THRESHOLD = ML_LABEL_THRESHOLD
+            MIN_CLASS_BALANCE = ML_LABEL_MIN_BALANCE
+            MAX_CLASS_BALANCE = ML_LABEL_MAX_BALANCE
             close = df["c"]
             future_close = close.shift(-LABEL_LOOKAHEAD)
             threshold = close * LABEL_THRESHOLD
@@ -360,7 +371,7 @@ class RegimeAwareEnsemble:
                 break
 
         if regime_col is not None:
-            regime_values = df[regime_col].values[:-1]  # align with y
+            regime_values = df[regime_col].values[:-ML_LABEL_LOOKAHEAD]  # align with X, y
             for regime in RegimeModelSet.REGIMES[:-1]:   # skip GLOBAL
                 mask = regime_values == regime
                 if mask.sum() >= 30:

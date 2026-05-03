@@ -228,6 +228,14 @@ TRAIN_BARS_MULTIPLIER = 6
 MIN_TRAINING_SAMPLES = 100
 
 # ============================================================
+# ML LABEL GENERATION
+# ============================================================
+ML_LABEL_LOOKAHEAD = 3        # จำนวน bars ล่วงหน้าสำหรับสร้าง label
+ML_LABEL_THRESHOLD = 0.0001   # threshold เป็น % ของ price (1 pip equivalent)
+ML_LABEL_MIN_BALANCE = 0.30   # warning เมื่อ positive class < ค่านี้
+ML_LABEL_MAX_BALANCE = 0.70   # warning เมื่อ positive class > ค่านี้
+
+# ============================================================
 # PER-SYMBOL SETTINGS
 # ============================================================
 SYMBOL_SETTINGS = {
