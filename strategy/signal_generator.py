@@ -4,6 +4,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Maximum additive bonus that can be applied to base confidence per signal bar
+_MAX_TOTAL_BONUS = 0.25
+
 
 class SignalGenerator:
     """Generate signals with ML + ICT confluence scoring"""
@@ -113,57 +116,60 @@ class SignalGenerator:
                     ict_conf = min(ict_sell / 4.0, 1.0)
                     confidence = ict_conf * 0.65
 
-            # ===== TECH INDICATOR BONUS =====
+            # ===== TECH INDICATOR BONUS (cap at 0.15) =====
+            tech_bonus = 0.0
             if signal == 1:
                 if rsi < 50:
-                    confidence += 0.05
+                    tech_bonus += 0.05
                 if macd_hist > 0:
-                    confidence += 0.04
+                    tech_bonus += 0.04
                 if stoch_k < 40:
-                    confidence += 0.05
+                    tech_bonus += 0.05
                 if ema_cross > 0:
-                    confidence += 0.03
+                    tech_bonus += 0.03
                 if adx > 25:
-                    confidence += 0.04
+                    tech_bonus += 0.04
                 if adx > 35:
-                    confidence += 0.03
+                    tech_bonus += 0.03
             elif signal == -1:
                 if rsi > 50:
-                    confidence += 0.05
+                    tech_bonus += 0.05
                 if macd_hist < 0:
-                    confidence += 0.04
+                    tech_bonus += 0.04
                 if stoch_k > 60:
-                    confidence += 0.05
+                    tech_bonus += 0.05
                 if ema_cross < 0:
-                    confidence += 0.03
+                    tech_bonus += 0.03
                 if adx > 25:
-                    confidence += 0.04
+                    tech_bonus += 0.04
                 if adx > 35:
-                    confidence += 0.03
+                    tech_bonus += 0.03
+            tech_bonus = min(tech_bonus, 0.15)
 
-            # ===== ICT BONUS (higher weight since ICT is now core) =====
+            # ===== ICT BONUS =====
+            ict_bonus = 0.0
             if signal == 1:
-                if ict_buy >= 4:   confidence += 0.15
-                elif ict_buy >= 3: confidence += 0.10
-                elif ict_buy >= 2: confidence += 0.05
+                if ict_buy >= 4:   ict_bonus = 0.15
+                elif ict_buy >= 3: ict_bonus = 0.10
+                elif ict_buy >= 2: ict_bonus = 0.05
             elif signal == -1:
-                if ict_sell >= 4:   confidence += 0.15
-                elif ict_sell >= 3: confidence += 0.10
-                elif ict_sell >= 2: confidence += 0.05
+                if ict_sell >= 4:   ict_bonus = 0.15
+                elif ict_sell >= 3: ict_bonus = 0.10
+                elif ict_sell >= 2: ict_bonus = 0.05
 
             # ===== ZIGZAG DIRECTION ALIGNMENT FILTER =====
-            # If signal aligns with zigzag swing direction → small confidence boost
-            # If signal conflicts with zigzag swing direction → confidence penalty
+            zz_bonus = 0.0
+            zz_penalty = False
             zz_dir = int(df.iloc[i].get('zz_direction', 0))
             if zz_dir != 0:
                 if signal == 1 and zz_dir == -1:
-                    confidence *= 0.72   # Counter-trend buy in bearish swing — penalise
+                    zz_penalty = True    # Counter-trend buy in bearish swing — penalise
                 elif signal == -1 and zz_dir == 1:
-                    confidence *= 0.72   # Counter-trend sell in bullish swing — penalise
+                    zz_penalty = True    # Counter-trend sell in bullish swing — penalise
                 elif signal == 1 and zz_dir == 1:
-                    confidence = min(confidence + 0.04, 1.0)   # Aligned with bullish zigzag
+                    zz_bonus = 0.04      # Aligned with bullish zigzag
                 elif signal == -1 and zz_dir == -1:
-                    confidence = min(confidence + 0.04, 1.0)   # Aligned with bearish zigzag
+                    zz_bonus = 0.04      # Aligned with bearish zigzag
 
             # ===== PENALTY for conflicting signals =====
             if signal == 1 and ict_sell >= 2:
@@ -171,21 +177,27 @@ class SignalGenerator:
             if signal == -1 and ict_buy >= 2:
                 confidence *= 0.6
 
-            # Pin bar bonus
+            # ===== PATTERN BONUS (cap at 0.10) =====
+            pattern_bonus = 0.0
             if signal == 1 and df.iloc[i].get('is_pin_bar_bull', 0):
-                confidence += 0.08
+                pattern_bonus += 0.08
             if signal == -1 and df.iloc[i].get('is_pin_bar_bear', 0):
-                confidence += 0.08
-
-            # Engulfing bonus
+                pattern_bonus += 0.08
             if signal == 1 and df.iloc[i].get('is_engulfing_bull', 0):
-                confidence += 0.05
+                pattern_bonus += 0.05
             if signal == -1 and df.iloc[i].get('is_engulfing_bear', 0):
-                confidence += 0.05
-
-            # Volume spike bonus
+                pattern_bonus += 0.05
             if signal != 0 and df.iloc[i].get('vol_spike', 0):
-                confidence += 0.05
+                pattern_bonus += 0.05
+            pattern_bonus = min(pattern_bonus, 0.10)
+
+            # ===== CAP TOTAL BONUS AT _MAX_TOTAL_BONUS =====
+            total_bonus = min(tech_bonus + ict_bonus + pattern_bonus + zz_bonus, _MAX_TOTAL_BONUS)
+            confidence = confidence + total_bonus
+
+            # Apply zigzag counter-trend penalty (after bonuses)
+            if zz_penalty:
+                confidence *= 0.50
 
             confidence = np.clip(confidence, 0.0, 1.0)
 
