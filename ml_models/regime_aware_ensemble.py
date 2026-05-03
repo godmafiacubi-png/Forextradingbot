@@ -310,9 +310,21 @@ class RegimeAwareEnsemble:
             if "c" not in df.columns:
                 return None, None
 
-            y = (df["c"].shift(-1) > df["c"]).astype(int).values
-            X = X[:-1]
-            y = y[:-1]
+            LABEL_LOOKAHEAD = 3
+            LABEL_THRESHOLD = 0.0001
+            MIN_CLASS_BALANCE = 0.30
+            MAX_CLASS_BALANCE = 0.70
+            close = df["c"]
+            future_close = close.shift(-LABEL_LOOKAHEAD)
+            threshold = close * LABEL_THRESHOLD
+            y = (future_close > close + threshold).astype(int).values
+            X = X[:-LABEL_LOOKAHEAD]
+            y = y[:-LABEL_LOOKAHEAD]
+
+            pos_ratio = float(y.mean()) if len(y) > 0 else 0.5
+            logger.info(f"[RegimeEnsemble.prepare_data] Label balance: {pos_ratio:.1%} positive ({int(y.sum())}/{len(y)})")
+            if pos_ratio < MIN_CLASS_BALANCE or pos_ratio > MAX_CLASS_BALANCE:
+                logger.warning(f"[RegimeEnsemble.prepare_data] Label imbalance: {pos_ratio:.1%} — check data quality")
 
             if len(y) < 30:
                 return None, None

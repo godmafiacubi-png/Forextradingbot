@@ -147,9 +147,9 @@ class ICTFeatures:
         pivot_high = np.zeros(n)
         pivot_low  = np.zeros(n)
 
-        for i in range(depth, n - depth):
-            window_h = h[i - depth: i + depth + 1]
-            window_l = l[i - depth: i + depth + 1]
+        for i in range(depth, n):
+            window_h = h[max(0, i - depth): i + 1]
+            window_l = l[max(0, i - depth): i + 1]
             if h[i] == max(window_h):
                 pivot_high[i] = h[i]
             if l[i] == min(window_l):
