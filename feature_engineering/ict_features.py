@@ -13,22 +13,39 @@ class ICTFeatures:
         self.df = self.df.sort_values('time').reset_index(drop=True)
 
     def identify_order_blocks(self, lookback=10):
-        """Identify Order Blocks (vectorized)"""
+        """Identify Order Blocks (vectorized) — ICT-correct logic.
+
+        Demand OB = bearish candle immediately before a bullish impulse move.
+        Supply OB = bullish candle immediately before a bearish impulse move.
+        Impulse = candle whose body > 0.5 × ATR(14).
+        """
         h = self.df['h'].values
         l = self.df['l'].values
         o = self.df['o'].values
         c = self.df['c'].values
 
-        rolling_high = pd.Series(h).rolling(lookback, min_periods=1).max().shift(1).values
-        rolling_low = pd.Series(l).rolling(lookback, min_periods=1).min().shift(1).values
-
-        bearish_candle = c < o
-        new_high = h > rolling_high
-        ob_supply = (new_high & bearish_candle).astype(int)
-
         bullish_candle = c > o
-        new_low = l < rolling_low
-        ob_demand = (new_low & bullish_candle).astype(int)
+        bearish_candle = c < o
+
+        # Impulse detection: body larger than 0.5 × ATR(14)
+        atr_series = pd.Series(h - l).rolling(14, min_periods=1).mean()
+        body_series = pd.Series(np.abs(c - o))
+        impulse_threshold = atr_series * 0.5
+
+        bullish_impulse = bullish_candle & (body_series > impulse_threshold)
+        bearish_impulse = bearish_candle & (body_series > impulse_threshold)
+
+        # Demand OB = bearish candle followed by a bullish impulse on the next bar
+        ob_demand = (
+            pd.Series(bearish_candle) &
+            pd.Series(bullish_impulse).shift(-1).fillna(False).astype(bool)
+        ).astype(int)
+
+        # Supply OB = bullish candle followed by a bearish impulse on the next bar
+        ob_supply = (
+            pd.Series(bullish_candle) &
+            pd.Series(bearish_impulse).shift(-1).fillna(False).astype(bool)
+        ).astype(int)
 
         self.df['ob_supply'] = ob_supply
         self.df['ob_demand'] = ob_demand
@@ -75,26 +92,39 @@ class ICTFeatures:
         self.df['fvg_bearish'] = fvg_bearish
         self.df['fvg_size'] = fvg_size
 
-        # FVG unfilled detection (gap not yet closed)
+        # FVG unfilled / filled detection
+        # "unfilled" = the gap still exists and price has NOT returned to close it
+        # "filled"   = price has since re-entered the gap zone
         c = self.df['c'].values
         fvg_bull_unfilled = np.zeros(len(self.df), dtype=int)
         fvg_bear_unfilled = np.zeros(len(self.df), dtype=int)
-        last_bull_gap_high = np.nan
-        last_bear_gap_low = np.nan
+        fvg_bull_filled = np.zeros(len(self.df), dtype=int)
+        fvg_bear_filled = np.zeros(len(self.df), dtype=int)
+        last_bull_fvg_low = np.nan   # h[i-2]: lower boundary of the most recent bullish FVG gap
+        last_bear_fvg_high = np.nan  # l[i-2]: upper boundary of the most recent bearish FVG gap
 
         for i in range(2, len(self.df)):
             if fvg_bullish[i] == 1:
-                last_bull_gap_high = h[i - 2]
+                last_bull_fvg_low = h[i - 2]   # gap lower edge (high of the i-2 reference candle)
             if fvg_bearish[i] == 1:
-                last_bear_gap_low = l[i - 2]
+                last_bear_fvg_high = l[i - 2]  # gap upper edge (low of the i-2 reference candle)
 
-            if not np.isnan(last_bull_gap_high) and c[i] > last_bull_gap_high:
-                fvg_bull_unfilled[i] = 1
-            if not np.isnan(last_bear_gap_low) and c[i] < last_bear_gap_low:
-                fvg_bear_unfilled[i] = 1
+            # Unfilled: price is still below/above the gap → gap is intact
+            if not np.isnan(last_bull_fvg_low) and c[i] < last_bull_fvg_low:
+                fvg_bull_unfilled[i] = 1        # gap is above current price
+            if not np.isnan(last_bear_fvg_high) and c[i] > last_bear_fvg_high:
+                fvg_bear_unfilled[i] = 1        # gap is below current price
+
+            # Filled: price has returned into (or through) the gap zone
+            if not np.isnan(last_bull_fvg_low) and c[i] >= last_bull_fvg_low:
+                fvg_bull_filled[i] = 1
+            if not np.isnan(last_bear_fvg_high) and c[i] <= last_bear_fvg_high:
+                fvg_bear_filled[i] = 1
 
         self.df['fvg_bull_unfilled'] = fvg_bull_unfilled
         self.df['fvg_bear_unfilled'] = fvg_bear_unfilled
+        self.df['fvg_bull_filled'] = fvg_bull_filled
+        self.df['fvg_bear_filled'] = fvg_bear_filled
 
         return self.df
 
