@@ -429,8 +429,9 @@ class MLHub:
                 signal_data: Dict):
         """Call when no trade was entered (hold reward for RL)"""
         if self.rl:
-            raw_state = self.rl.build_state(
-                market_data, signal_data, False, 0.0, symbol
+            raw_state = (
+                self._last_rl_state[symbol] if symbol in self._last_rl_state
+                else self.rl.build_state(market_data, signal_data, False, 0.0, symbol)
             )
             self.rl.record_hold_reward(symbol, raw_state, had_signal)
 
