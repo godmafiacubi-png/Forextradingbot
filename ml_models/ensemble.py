@@ -216,9 +216,20 @@ class EnsembleModel:
                 )
                 return None, None
 
-            y = (df[close_col].shift(-1) > df[close_col]).astype(int).values
-            X = X[:-1]
-            y = y[:-1]
+            LABEL_LOOKAHEAD = 3
+            LABEL_THRESHOLD = 0.0001
+            MIN_CLASS_BALANCE = 0.30
+            MAX_CLASS_BALANCE = 0.70
+            future_close = df[close_col].shift(-LABEL_LOOKAHEAD)
+            threshold = df[close_col] * LABEL_THRESHOLD
+            y = (future_close > df[close_col] + threshold).astype(int).values
+            X = X[:-LABEL_LOOKAHEAD]
+            y = y[:-LABEL_LOOKAHEAD]
+
+            pos_ratio = float(y.mean()) if len(y) > 0 else 0.5
+            logger.info(f"[prepare_data] Label balance: {pos_ratio:.1%} positive ({int(y.sum())}/{len(y)})")
+            if pos_ratio < MIN_CLASS_BALANCE or pos_ratio > MAX_CLASS_BALANCE:
+                logger.warning(f"[prepare_data] Label imbalance detected: {pos_ratio:.1%} positive — check data quality")
 
             if len(y) < 30:
                 logger.warning(f"Only {len(y)} samples. Skipping training.")
@@ -241,6 +252,11 @@ class EnsembleModel:
         if X is None or len(y) < 30:
             logger.warning("Not enough data to train")
             return False
+
+        if X is not None and y is not None and len(y) > 0:
+            pos_count = int(y.sum())
+            neg_count = len(y) - pos_count
+            logger.info(f"[Train] {len(y)} samples | BUY:{pos_count} ({pos_count/len(y):.1%}) SELL:{neg_count} ({neg_count/len(y):.1%})")
 
         # ---- Base models ----
         try:
