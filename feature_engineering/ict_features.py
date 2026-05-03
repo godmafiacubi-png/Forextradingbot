@@ -13,11 +13,15 @@ class ICTFeatures:
         self.df = self.df.sort_values('time').reset_index(drop=True)
 
     def identify_order_blocks(self, lookback=10):
-        """Identify Order Blocks (vectorized) — ICT-correct logic.
+        """Identify Order Blocks (vectorized) — ICT-correct logic, no lookahead.
 
-        Demand OB = bearish candle immediately before a bullish impulse move.
-        Supply OB = bullish candle immediately before a bearish impulse move.
+        At bar i:
+          Demand OB = bar (i-1) was bearish AND bar i is a bullish impulse.
+          Supply OB = bar (i-1) was bullish AND bar i is a bearish impulse.
         Impulse = candle whose body > 0.5 × ATR(14).
+
+        Using shift(+1) on the previous-candle condition (rather than shift(-1)
+        on the impulse condition) ensures no future data is read at training time.
         """
         h = self.df['h'].values
         l = self.df['l'].values
@@ -35,16 +39,16 @@ class ICTFeatures:
         bullish_impulse = bullish_candle & (body_series > impulse_threshold)
         bearish_impulse = bearish_candle & (body_series > impulse_threshold)
 
-        # Demand OB = bearish candle followed by a bullish impulse on the next bar
+        # Demand OB at bar i = bar (i-1) was bearish + bar i is the bullish impulse
         ob_demand = (
-            pd.Series(bearish_candle) &
-            pd.Series(bullish_impulse).shift(-1).fillna(False).astype(bool)
+            pd.Series(bearish_candle).shift(1).fillna(False).astype(bool) &
+            pd.Series(bullish_impulse)
         ).astype(int)
 
-        # Supply OB = bullish candle followed by a bearish impulse on the next bar
+        # Supply OB at bar i = bar (i-1) was bullish + bar i is the bearish impulse
         ob_supply = (
-            pd.Series(bullish_candle) &
-            pd.Series(bearish_impulse).shift(-1).fillna(False).astype(bool)
+            pd.Series(bullish_candle).shift(1).fillna(False).astype(bool) &
+            pd.Series(bearish_impulse)
         ).astype(int)
 
         self.df['ob_supply'] = ob_supply
