@@ -300,7 +300,11 @@ class TradingBot:
             df = self.mt5.get_ohlcv(SYMBOLS['FOREX'][0], TIMEFRAMES.get(PRIMARY_TIMEFRAME, mt5.TIMEFRAME_H1), bars=LOOKBACK_PERIOD)
             if df is not None and len(df) > 0:
                 df = MLFeatures(ICTFeatures(df).get_ict_features()).get_ml_features()
-                exclude = {'time', 'o', 'h', 'l', 'c', 'v', 'signal', 'confidence'}
+                exclude = {
+                    'time', 'o', 'h', 'l', 'c', 'v', 'signal', 'confidence',
+                    'regime', 'market_regime', 'htf_regime',
+                    'symbol', 'date', 'datetime', 'timestamp', 'index',
+                }
                 self.ml_model.feature_cols = [c for c in df.columns if c not in exclude and np.issubdtype(df[c].dtype, np.number)]
                 self.ml_model.n_features = len(self.ml_model.feature_cols)
                 # sync ไปที่ regime_ensemble ด้วยถ้ามี
@@ -737,7 +741,11 @@ class TradingBot:
             rl_src   = hub_result.source
 
             # rl_state ยังต้องการสำหรับ record_trade_open ข้างล่าง
-            rl_state = self.rl_agent.build_state(sym_data, sig_data, has_pos, pnl_pct, symbol) if self.rl_agent else None
+            # ใช้ state ที่ hub.get_signal() สร้างไว้แล้วเพื่อหลีกเลี่ยงการเรียกซ้ำ
+            rl_state = self.hub.get_last_rl_state(symbol)
+            if rl_state is None and self.rl_agent:
+                logger.warning(f"[run_strategy] rl_state cache miss for {symbol} — building fallback state")
+                rl_state = self.rl_agent.build_state(sym_data, sig_data, has_pos, pnl_pct, symbol)
 
             rl_name = ["HOLD", "BUY", "SELL"][rl_act]
             regime_name = hub_result.regime

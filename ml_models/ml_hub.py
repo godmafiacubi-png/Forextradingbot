@@ -167,6 +167,9 @@ class MLHub:
         self._open_actions: Dict[str, int] = {}
         self._open_meta_ctx: Dict[str, np.ndarray] = {}
 
+        # ---- RL state cache (populated by get_signal, consumed by callers) ----
+        self._last_rl_state: Dict[str, np.ndarray] = {}
+
         logger.info(
             f"[MLHub] Init: temporal={use_temporal_encoder} "
             f"meta={use_meta_learner} rl={use_rl} "
@@ -266,6 +269,9 @@ class MLHub:
         else:
             raw_state = np.zeros(25, dtype=np.float32)
 
+        # Cache for callers that need the state after get_signal() returns
+        self._last_rl_state[symbol] = raw_state
+
         # ---- Temporal encoding ----
         temporal_enriched = False
         if self.temporal:
@@ -341,6 +347,17 @@ class MLHub:
             regime=regime,
             temporal_enriched=temporal_enriched,
         )
+
+    # ----------------------------------------------------------
+    # RL state accessor
+    # ----------------------------------------------------------
+
+    def get_last_rl_state(self, symbol: str) -> Optional[np.ndarray]:
+        """Return the RL state that was built during the most recent
+        get_signal() call for *symbol*.  Returns None if get_signal()
+        has not been called yet for that symbol.
+        """
+        return self._last_rl_state.get(symbol)
 
     # ----------------------------------------------------------
     # Trade lifecycle
