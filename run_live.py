@@ -15,6 +15,15 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+import warnings
+warnings.warn(
+    "run_live.py is a legacy entry point and lacks RL, Meta-Learner, "
+    "Temporal Encoder, and Regime-Aware features. "
+    "Use 'python main.py' for the full ML stack.",
+    DeprecationWarning,
+    stacklevel=1,
+)
+
 # Import after logging setup
 from config.settings import *
 from data_layer.mt5_connector import MT5Connector
@@ -34,6 +43,10 @@ import MetaTrader5 as mt5
 
 class LiveTradingBot:
     def __init__(self):
+        logger.warning(
+            "⚠️  run_live.py is LEGACY — missing RL, Meta-Learner, Temporal & Regime features. "
+            "Run 'python main.py' for the full ML stack."
+        )
         logger.info("="*80)
         logger.info("🚀 TRADING BOT INITIALIZATION")
         logger.info("="*80)

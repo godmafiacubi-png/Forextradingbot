@@ -261,7 +261,6 @@ class RegimeAwareEnsemble:
         self.embedding_dim = embedding_dim
 
         self.feature_cols: Optional[List[str]] = None
-        self.global_scaler = StandardScaler()
         self.is_trained = False
         self.n_features: Optional[int] = None
 
@@ -359,7 +358,6 @@ class RegimeAwareEnsemble:
         if not success:
             return False
 
-        self.global_scaler.fit_transform(X)
         self.is_trained = True
         self.n_features = X.shape[1]
 
@@ -460,7 +458,6 @@ class RegimeAwareEnsemble:
                 pickle.dump({
                     "regime_models": self.regime_models,
                     "symbol_embedding": self.symbol_embedding,
-                    "global_scaler": self.global_scaler,
                     "feature_cols": self.feature_cols,
                     "is_trained": self.is_trained,
                     "n_features": self.n_features,
@@ -479,7 +476,6 @@ class RegimeAwareEnsemble:
                 data = pickle.load(f)
             self.regime_models = data["regime_models"]
             self.symbol_embedding = data["symbol_embedding"]
-            self.global_scaler = data["global_scaler"]
             self.feature_cols = data["feature_cols"]
             self.is_trained = data["is_trained"]
             self.n_features = data["n_features"]

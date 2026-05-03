@@ -230,8 +230,10 @@ class MetaExperience:
             return None
         import random
         indices = random.sample(range(len(self._contexts)), batch_size)
-        X = np.array([list(self._contexts)[i] for i in indices])
-        y = np.array([list(self._outcomes)[i] for i in indices])
+        ctx_list = list(self._contexts)
+        out_list = list(self._outcomes)
+        X = np.array([ctx_list[i] for i in indices])
+        y = np.array([out_list[i] for i in indices])
         return X, y
 
     def __len__(self):
