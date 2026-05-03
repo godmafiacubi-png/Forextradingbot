@@ -88,30 +88,30 @@ class SignalGenerator:
             ema_cross = float(df.iloc[i].get('ema_cross', 0))
 
             # ===== NEW v8.0: ICT-FIRST DECISION TREE =====
-            # GATE 1: ICT >= 2 is MANDATORY (hard gate, no ML-only exceptions)
+            # GATE 1: ICT >= 1 required (lowered for testing)
             signal = 0
             confidence = 0.0
 
-            if ict_buy >= 2:
+            if ict_buy >= 1:
                 # GATE 2: ML must confirm direction
                 if ml_prob > ml_threshold_buy:
                     signal = 1
                     ict_conf = min(ict_buy / 4.0, 1.0)
                     ml_conf  = np.clip((ml_prob - 0.5) * 2.0, 0, 1)
                     confidence = ict_conf * 0.60 + ml_conf * 0.40
-                elif ict_buy >= 3 and ml_prob > 0.52:
+                elif ict_buy >= 2 and ml_prob > 0.52:
                     # Very strong ICT, borderline ML
                     signal = 1
                     ict_conf = min(ict_buy / 4.0, 1.0)
                     confidence = ict_conf * 0.65
 
-            elif ict_sell >= 2:
+            elif ict_sell >= 1:
                 if ml_prob < ml_threshold_sell:
                     signal = -1
                     ict_conf = min(ict_sell / 4.0, 1.0)
                     ml_conf  = np.clip((0.5 - ml_prob) * 2.0, 0, 1)
                     confidence = ict_conf * 0.60 + ml_conf * 0.40
-                elif ict_sell >= 3 and ml_prob < 0.48:
+                elif ict_sell >= 2 and ml_prob < 0.48:
                     signal = -1
                     ict_conf = min(ict_sell / 4.0, 1.0)
                     confidence = ict_conf * 0.65
