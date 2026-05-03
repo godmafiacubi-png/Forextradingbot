@@ -48,8 +48,8 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 #   XAUUSDm:  Strong trends, good R:R potential
 # ============================================================
 SYMBOLS = {
-    'FOREX': ['EURUSDm'],
-    'CRYPTO': [],      # disabled — kept for get_symbol_config() compatibility
+    'FOREX': ['EURUSDm', 'GBPUSDm', 'USDJPYm'],
+    'CRYPTO': ['BTCUSDm'],
     'GOLD': ['XAUUSDm'],
 }
 
@@ -120,7 +120,7 @@ SIGNAL_COOLDOWN = 2
 POSITION_SIZING_METHOD = 'ATR'
 ACCOUNT_RISK_PERCENT = 0.7
 MAX_DAILY_RISK_PERCENT = 3.0 # was 5.0 — tighter daily risk
-MAX_OPEN_TRADES = 3          # was 5 — focus, not diversify
+MAX_OPEN_TRADES = 5          # was 3 — allow more symbols
 MAX_TRADES_PER_SYMBOL = 1
 
 # ============================================================
@@ -147,7 +147,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 65    # was 50 — A grade minimum
+MIN_QUALITY_SCORE = 35    # was 65 — lowered for testing
 
 # ============================================================
 # QUIET MARKET KILL SWITCH
