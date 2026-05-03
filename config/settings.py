@@ -78,11 +78,11 @@ CORRELATION_GROUPS = {
 MAX_SAME_DIRECTION_CORRELATED = 2
 
 SYMBOL_BEST_SESSIONS = {
-    'EURUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
-    'GBPUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
+    'EURUSDm': ['LONDON', 'NY', 'OVERLAP'],
+    'GBPUSDm': ['LONDON', 'NY', 'OVERLAP'],
     'USDJPYm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
     'BTCUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
-    'XAUUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
+    'XAUUSDm': ['LONDON', 'NY', 'OVERLAP'],
 }
 
 import MetaTrader5 as mt5
@@ -119,7 +119,7 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 POSITION_SIZING_METHOD = 'ATR'
 ACCOUNT_RISK_PERCENT = 0.7
-MAX_DAILY_RISK_PERCENT = 3.0 # was 5.0 — tighter daily risk
+MAX_DAILY_RISK_PERCENT = 5.0 # was 5.0 — tighter daily risk
 MAX_OPEN_TRADES = 5          # was 3 — allow more symbols
 MAX_TRADES_PER_SYMBOL = 1
 
