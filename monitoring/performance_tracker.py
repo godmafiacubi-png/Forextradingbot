@@ -32,19 +32,8 @@ class PerformanceTracker:
         """
         if ticket not in self.open_trades:
             if actual_pnl is not None:
-                self.trades.append({
-                    'ticket': ticket,
-                    'symbol': 'UNKNOWN',
-                    'side': 'UNKNOWN',
-                    'entry': 0,
-                    'exit': exit_price if exit_price else 0,
-                    'size': 0,
-                    'pnl': actual_pnl,
-                    'open_time': datetime.now(),
-                    'close_time': datetime.now()
-                })
                 result = "WIN" if actual_pnl > 0 else "LOSS"
-                logger.info(f"[TRACKER] Closed #{ticket} (untracked) {result} PnL=${actual_pnl:.2f}")
+                logger.info(f"[TRACKER] Closed #{ticket} (untracked) {result} PnL=${actual_pnl:.2f} — excluded from WR stats")
             else:
                 logger.debug(f"[TRACKER] Ticket #{ticket} not found, no PnL")
             return
