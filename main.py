@@ -392,6 +392,11 @@ class TradingBot:
                     exit_price = prev.price_current if hasattr(prev, 'price_current') else prev.price_open
                     self.tracker.close_trade(ticket, exit_price, actual_pnl=pnl)
 
+                    if ticket not in self.active_trades:
+                        continue
+
+                    del self.active_trades[ticket]
+
                     self.risk_guard.record_trade_result(pnl)
                     self.adaptive_threshold.record_result(is_win)
                     self.loss_streak.record_result(is_win)
