@@ -44,21 +44,24 @@ class SignalGenerator:
             ict_sell = 0
 
             # Order Block
-            if df.iloc[i].get('ob_demand', 0):
+            near_demand = float(df.iloc[i].get('near_demand_ob', 1.0))
+            near_supply = float(df.iloc[i].get('near_supply_ob', 1.0))
+            if near_demand < 0.005 or df.iloc[i].get('ob_demand', 0):
                 ict_buy += 1
-            if df.iloc[i].get('ob_supply', 0):
+            if near_supply < 0.005 or df.iloc[i].get('ob_supply', 0):
                 ict_sell += 1
 
             # FVG
-            if df.iloc[i].get('fvg_bullish', 0):
+            if df.iloc[i].get('fvg_bull_unfilled', 0) or df.iloc[i].get('fvg_bullish', 0):
                 ict_buy += 1
-            if df.iloc[i].get('fvg_bearish', 0):
+            if df.iloc[i].get('fvg_bear_unfilled', 0) or df.iloc[i].get('fvg_bearish', 0):
                 ict_sell += 1
 
             # BOS / CHoCH
-            if df.iloc[i].get('bos_bullish', 0) or df.iloc[i].get('choch_bullish', 0):
+            _start = max(0, i - 4)
+            if df['bos_bullish'].iloc[_start:i+1].any() or df['choch_bullish'].iloc[_start:i+1].any():
                 ict_buy += 1
-            if df.iloc[i].get('bos_bearish', 0) or df.iloc[i].get('choch_bearish', 0):
+            if df['bos_bearish'].iloc[_start:i+1].any() or df['choch_bearish'].iloc[_start:i+1].any():
                 ict_sell += 1
 
             # OTE Zone
