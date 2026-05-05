@@ -70,12 +70,14 @@ SYMBOL_CURRENCIES = {
 }
 
 CORRELATION_GROUPS = {
-    'EUR_GBP': ['EURUSDm', 'GBPUSDm'],
-    'USD_MAJORS': ['EURUSDm', 'GBPUSDm', 'USDJPYm'],  # ทุกคู่ที่ correlate กับ USD
+    'JPY_VS_EURUSD': ['USDJPYm', 'EURUSDm'],   # JPY must not match EUR direction
+    'JPY_VS_GBPUSD': ['USDJPYm', 'GBPUSDm'],   # JPY must not match GBP direction
 }
 
-# จำกัดให้เปิด BUY USD pairs พร้อมกันได้แค่ 1 ตัว (EUR+GBP+JPY ทิศเดียวกัน = risky)
-MAX_SAME_DIRECTION_CORRELATED = 2
+# XAUUSDm: no group → trades freely
+# EURUSDm + GBPUSDm: no group together → can go same direction
+# USDJPYm + EURUSDm/GBPUSDm: in JPY_VS_* groups, max 1 same direction → blocked
+MAX_SAME_DIRECTION_CORRELATED = 1
 
 SYMBOL_BEST_SESSIONS = {
     'EURUSDm': ['LONDON', 'NY', 'OVERLAP'],
@@ -195,7 +197,7 @@ RECOVERY_MAX_TRADES = 2
 # CORRELATION
 # ============================================================
 CORRELATION_FILTER_ENABLED = True
-MAX_SAME_DIRECTION_CORRELATED = 2
+MAX_SAME_DIRECTION_CORRELATED = 1
 MAX_CURRENCY_EXPOSURE = 5
 
 # ============================================================
