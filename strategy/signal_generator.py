@@ -51,10 +51,12 @@ class SignalGenerator:
             if near_supply < 0.005 or df.iloc[i].get('ob_supply', 0):
                 ict_sell += 1
 
-            # FVG
-            if df.iloc[i].get('fvg_bull_unfilled', 0) or df.iloc[i].get('fvg_bullish', 0):
+            # FVG: score newly created gaps or price returning near an active imbalance.
+            near_bull_fvg = float(df.iloc[i].get('near_bull_fvg', 1.0))
+            near_bear_fvg = float(df.iloc[i].get('near_bear_fvg', 1.0))
+            if df.iloc[i].get('fvg_bullish', 0) or (df.iloc[i].get('fvg_bull_unfilled', 0) and near_bull_fvg < 0.005):
                 ict_buy += 1
-            if df.iloc[i].get('fvg_bear_unfilled', 0) or df.iloc[i].get('fvg_bearish', 0):
+            if df.iloc[i].get('fvg_bearish', 0) or (df.iloc[i].get('fvg_bear_unfilled', 0) and near_bear_fvg < 0.005):
                 ict_sell += 1
 
             # BOS / CHoCH
@@ -95,28 +97,43 @@ class SignalGenerator:
             signal = 0
             confidence = 0.0
 
-            if ict_buy >= 2:
+            # Resolve directional conflict before asking ML to confirm.
+            # If both sides have enough confluence and neither side is stronger,
+            # the setup is mixed ICT context and should be skipped.
+            directional_bias = 0
+            directional_score = 0
+            opposite_score = 0
+            if ict_buy >= 2 and ict_buy > ict_sell:
+                directional_bias = 1
+                directional_score = ict_buy
+                opposite_score = ict_sell
+            elif ict_sell >= 2 and ict_sell > ict_buy:
+                directional_bias = -1
+                directional_score = ict_sell
+                opposite_score = ict_buy
+
+            if directional_bias == 1:
                 # GATE 2: ML must confirm direction
                 if ml_prob > ml_threshold_buy:
                     signal = 1
-                    ict_conf = min(ict_buy / 4.0, 1.0)
+                    ict_conf = min(directional_score / 4.0, 1.0)
                     ml_conf  = np.clip((ml_prob - 0.5) * 2.0, 0, 1)
                     confidence = ict_conf * 0.60 + ml_conf * 0.40
-                elif ict_buy >= 3 and ml_prob > 0.52:
+                elif directional_score >= 3 and ml_prob > 0.52:
                     # Very strong ICT, borderline ML
                     signal = 1
-                    ict_conf = min(ict_buy / 4.0, 1.0)
+                    ict_conf = min(directional_score / 4.0, 1.0)
                     confidence = ict_conf * 0.65
 
-            elif ict_sell >= 2:
+            elif directional_bias == -1:
                 if ml_prob < ml_threshold_sell:
                     signal = -1
-                    ict_conf = min(ict_sell / 4.0, 1.0)
+                    ict_conf = min(directional_score / 4.0, 1.0)
                     ml_conf  = np.clip((0.5 - ml_prob) * 2.0, 0, 1)
                     confidence = ict_conf * 0.60 + ml_conf * 0.40
-                elif ict_sell >= 3 and ml_prob < 0.48:
+                elif directional_score >= 3 and ml_prob < 0.48:
                     signal = -1
-                    ict_conf = min(ict_sell / 4.0, 1.0)
+                    ict_conf = min(directional_score / 4.0, 1.0)
                     confidence = ict_conf * 0.65
 
             # ===== TECH INDICATOR BONUS (cap at 0.15) =====
@@ -175,10 +192,9 @@ class SignalGenerator:
                     zz_bonus = 0.04      # Aligned with bearish zigzag
 
             # ===== PENALTY for conflicting signals =====
-            if signal == 1 and ict_sell >= 2:
-                confidence *= 0.6
-            if signal == -1 and ict_buy >= 2:
-                confidence *= 0.6
+            if signal != 0 and opposite_score > 0:
+                conflict_ratio = opposite_score / max(directional_score, 1)
+                confidence *= max(0.35, 1.0 - 0.35 * conflict_ratio)
 
             # ===== PATTERN BONUS (cap at 0.10) =====
             pattern_bonus = 0.0

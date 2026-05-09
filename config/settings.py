@@ -139,7 +139,7 @@ MAX_DRAWDOWN_PERCENT = 10.0
 # FILTERS
 # ============================================================
 MIN_ADX = 22
-MIN_ICT_SCORE = 1
+MIN_ICT_SCORE = 2
 PULLBACK_RSI_BUY_MAX = 60
 PULLBACK_RSI_SELL_MIN = 40
 
@@ -248,7 +248,7 @@ SYMBOL_SETTINGS = {
         'risk_pct': 0.5,
         'min_confidence': 0.55,
         'min_adx': 25,
-        'min_ict_score': 1,
+        'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
         'ml_sell_threshold': 0.47,
         'pullback_rsi_buy_max': 58,
@@ -269,7 +269,7 @@ SYMBOL_SETTINGS = {
         'risk_pct': 0.3,
         'min_confidence': 0.55,
         'min_adx': 25,
-        'min_ict_score': 1,
+        'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
         'ml_sell_threshold': 0.47,
         'pullback_rsi_buy_max': 62,
@@ -290,7 +290,7 @@ SYMBOL_SETTINGS = {
         'risk_pct': 0.5,
         'min_confidence': 0.55,
         'min_adx': 25,
-        'min_ict_score': 1,
+        'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
         'ml_sell_threshold': 0.47,
         'pullback_rsi_buy_max': 62,
@@ -311,7 +311,7 @@ SYMBOL_SETTINGS = {
         'risk_pct': 0.6,
         'min_confidence': 0.55,
         'min_adx': 25,
-        'min_ict_score': 1,
+        'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
         'ml_sell_threshold': 0.47,
         'pullback_rsi_buy_max': 65,
@@ -332,7 +332,7 @@ SYMBOL_SETTINGS = {
         'risk_pct': 0.5,
         'min_confidence': 0.55,
         'min_adx': 25,
-        'min_ict_score': 1,
+        'min_ict_score': 2,
         'ml_buy_threshold': 0.53,
         'ml_sell_threshold': 0.47,
         'pullback_rsi_buy_max': 62,
