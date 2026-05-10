@@ -1,4 +1,6 @@
+from decimal import Decimal, ROUND_HALF_UP
 import logging
+
 import MetaTrader5 as mt5
 
 logger = logging.getLogger(__name__)
@@ -7,10 +9,11 @@ logger = logging.getLogger(__name__)
 class PositionSizer:
     """Calculate position size — auto-detect symbol info from MT5"""
 
-    def __init__(self, method='ATR', account_risk=1.0, max_drawdown=10.0):
+    def __init__(self, method='ATR', account_risk=1.0, max_drawdown=10.0, max_lot_size=2.0):
         self.method = method
         self.account_risk = account_risk
         self.max_drawdown = max_drawdown
+        self.max_lot_size = max_lot_size
         self.peak_balance = 0
         self._symbol_cache = {}
 
@@ -38,6 +41,17 @@ class PositionSizer:
             except Exception as exc:
                 logger.debug(f"Unable to load MT5 symbol info for {symbol}: {exc}")
         return None
+
+    @staticmethod
+    def _round_volume(volume, step):
+        if step <= 0:
+            step = 0.01
+        volume_dec = Decimal(str(volume))
+        step_dec = Decimal(str(step))
+        steps = (volume_dec / step_dec).to_integral_value(rounding=ROUND_HALF_UP)
+        rounded = steps * step_dec
+        decimals = max(0, -step_dec.as_tuple().exponent)
+        return float(round(rounded, decimals))
 
     def calculate_position_size(self, account_balance, atr_value, symbol_point,
                                 confidence=1.0, method=None, symbol=None):
@@ -83,12 +97,19 @@ class PositionSizer:
         vol_step = 0.01
         if sym_info:
             vol_min = sym_info.get('volume_min', 0.01)
-            vol_max = min(sym_info.get('volume_max', 100.0), 2.0)
+            vol_max = min(sym_info.get('volume_max', 100.0), self.max_lot_size)
             vol_step = sym_info.get('volume_step', 0.01)
 
         # Round to volume step
-        lot_size = round(round(lot_size / vol_step) * vol_step, 2)
-        lot_size = max(min(lot_size, vol_max), vol_min)
+        if lot_size < vol_min:
+            logger.warning(
+                f"Calculated lot {lot_size:.4f} is below broker minimum {vol_min}; skip to avoid over-risking"
+            )
+            return 0.0
+
+        lot_size = self._round_volume(min(lot_size, vol_max), vol_step)
+        if lot_size < vol_min:
+            return 0.0
 
         digits = sym_info['digits'] if sym_info else 5
         logger.info(f"Position: {lot_size} lots (risk={self.account_risk}%, "
@@ -122,7 +143,7 @@ class PositionSizer:
         sl_distance = atr_value * 1.0  # 1x ATR
 
         if sl_distance <= 0 or symbol_point <= 0:
-            return 0.01
+            return 0.0
 
         # วิธี 1: ใช้ tick_value จาก MT5 (แม่นยำที่สุด)
         if sym_info and sym_info.get('trade_tick_value', 0) > 0:
@@ -139,13 +160,13 @@ class PositionSizer:
             loss_per_lot = sl_ticks * tick_value
 
             if loss_per_lot <= 0:
-                return 0.01
+                return 0.0
 
             lot_size = risk_amount / loss_per_lot
             logger.debug(f"ATR sizing: risk=${risk_amount:.2f} sl_dist={sl_distance:.5f} "
                         f"ticks={sl_ticks:.0f} tick_val={tick_value} loss/lot=${loss_per_lot:.2f} "
                         f"-> {lot_size:.4f} lots")
-            return max(min(lot_size, 2.0), 0.01)
+            return max(min(lot_size, self.max_lot_size), 0.0)
 
         # วิธี 2: Fallback — ประมาณจาก pip value
         sl_pips = sl_distance / symbol_point
@@ -162,7 +183,7 @@ class PositionSizer:
             pip_value_per_lot = 10.0
 
         lot_size = risk_amount / (sl_pips * pip_value_per_lot)
-        return max(min(lot_size, 2.0), 0.01)
+        return max(min(lot_size, self.max_lot_size), 0.0)
 
     def calculate_sl_tp(self, price, signal, atr_value, sl_multiplier=1.0,
                         tp_multiplier=3.0, symbol=None):

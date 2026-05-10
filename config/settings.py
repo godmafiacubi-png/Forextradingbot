@@ -9,6 +9,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+def _env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'y', 'on'}
+
+
+def _env_int(name, default):
+    try:
+        return int(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(name, default):
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
 # ============================================================
 # BOT MODE
 # ============================================================
@@ -18,7 +39,7 @@ TRADING_MODE = BOT_MODE
 # ============================================================
 # MT5 CONNECTION
 # ============================================================
-MT5_LOGIN = int(os.getenv('MT5_LOGIN', '0'))
+MT5_LOGIN = _env_int('MT5_LOGIN', 0)
 MT5_PASSWORD = os.getenv('MT5_PASSWORD', '')
 MT5_SERVER = os.getenv('MT5_SERVER', '')
 MT5_PATH = os.getenv('MT5_PATH', '')
@@ -26,7 +47,7 @@ MT5_PATH = os.getenv('MT5_PATH', '')
 # ============================================================
 # DASHBOARD
 # ============================================================
-DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5001'))
+DASHBOARD_PORT = _env_int('DASHBOARD_PORT', 5001)
 
 # ============================================================
 # TELEGRAM
@@ -56,7 +77,7 @@ SYMBOLS = {
 SYMBOL_POINTS = {
     'EURUSDm': 0.00001,     # digits=5 point=1e-05
     'GBPUSDm': 0.00001,     # digits=5 point=1e-05
-    'USDJPYm': 0.0001,       # digits=3 point=0.001
+    'USDJPYm': 0.001,       # digits=3 point=0.001
     'BTCUSDm': 0.01,        # digits=2 point=0.01
     'XAUUSDm': 0.001,       # digits=3 point=0.001
 }
@@ -116,6 +137,14 @@ ML_THRESHOLD_BUY = 0.53
 ML_THRESHOLD_SELL = 0.47
 MIN_CONFIDENCE = 0.55        # was 0.38 — Prop Firm requires high confidence
 SIGNAL_COOLDOWN = 2
+
+# ============================================================
+# EXECUTION SAFETY
+# ============================================================
+DRY_RUN = _env_bool('DRY_RUN', False)
+ORDER_MAGIC = _env_int('ORDER_MAGIC', 123456)
+ORDER_DEVIATION = _env_int('ORDER_DEVIATION', 20)
+MAX_LOT_SIZE = _env_float('MAX_LOT_SIZE', 2.0)
 
 # ============================================================
 # POSITION SIZING

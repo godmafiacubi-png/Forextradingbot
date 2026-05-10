@@ -78,8 +78,15 @@ class LiveTradingBot:
             
             # Initialize strategy components
             self.signal_gen = SignalGenerator(self.ml_model)
-            self.position_sizer = PositionSizer(method=POSITION_SIZING_METHOD)
-            self.order_manager = OrderManager(self.mt5)
+            self.position_sizer = PositionSizer(method=POSITION_SIZING_METHOD, max_lot_size=MAX_LOT_SIZE)
+            self.order_manager = OrderManager(
+                self.mt5,
+                MAX_OPEN_TRADES,
+                MAX_TRADES_PER_SYMBOL,
+                dry_run=DRY_RUN,
+                magic=ORDER_MAGIC,
+                deviation=ORDER_DEVIATION,
+            )
             
             # Initialize monitoring
             self.monitor = SimpleMonitor()
