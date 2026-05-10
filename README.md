@@ -31,7 +31,8 @@ Edit `.env` with your MT5 credentials and notification settings. Do not commit `
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `BOT_MODE` | Optional | `AGGRESSIVE` uses the aggressive Flask dashboard. Any other value uses the lightweight default dashboard. |
+| `BOT_VERSION` | Optional | Version label shown in startup/shutdown logs; default `V8.0`. |
+| `BOT_MODE` | Optional | Trading mode label; default `NORMAL`. `AGGRESSIVE` uses the aggressive Flask dashboard. Any other value uses the lightweight default dashboard. |
 | `MT5_LOGIN` | Live trading | MetaTrader 5 account number. |
 | `MT5_PASSWORD` | Live trading | MetaTrader 5 account password. |
 | `MT5_SERVER` | Live trading | Broker server name exactly as shown in MT5. |

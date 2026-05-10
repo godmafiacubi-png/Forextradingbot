@@ -187,7 +187,7 @@ class M30Analyzer:
 class TradingBot:
     def __init__(self):
         logger.info("=" * 80)
-        logger.info(f"TRADING BOT v7.1 Deep RL | {BOT_MODE} | Port: {DASHBOARD_PORT}")
+        logger.info(f"TRADING BOT {BOT_VERSION} Deep RL | {BOT_MODE} | Port: {DASHBOARD_PORT}")
         logger.info(f"Execution safety: DRY_RUN={DRY_RUN} | LIVE_TRADING_CONFIRMED={LIVE_TRADING_CONFIRMED}")
         logger.info("Dueling DQN + PER + N-step + Market Regime")
         logger.info("=" * 80)
@@ -296,7 +296,7 @@ class TradingBot:
 
             logger.info("")
             logger.info("=" * 80)
-            logger.info(f"[OK] BOT v7.1 READY — {BOT_MODE} + Deep RL")
+            logger.info(f"[OK] BOT {BOT_VERSION} READY — {BOT_MODE} + Deep RL")
             logger.info(f"[OK] BE_ATR={BREAKEVEN_ATR} TRAIL_ATR={TRAILING_STOP_ATR} | Trailing: 5s thread")
             logger.info(f"[OK] Dashboard: http://localhost:{DASHBOARD_PORT}")
             logger.info(f"[OK] Execution: {'DRY RUN (no orders sent)' if DRY_RUN else 'LIVE ORDERS ENABLED'} | Magic={ORDER_MAGIC}")
@@ -984,7 +984,7 @@ class TradingBot:
             logger.debug(traceback.format_exc())
 
     def live_trading(self):
-        logger.info(f"STARTING v7.1 {BOT_MODE} + Deep RL | Port: {DASHBOARD_PORT}")
+        logger.info(f"STARTING {BOT_VERSION} {BOT_MODE} + Deep RL | Port: {DASHBOARD_PORT}")
         logger.info(f"Dashboard: http://localhost:{DASHBOARD_PORT}")
         logger.info(f"Trailing Thread: 5s | Main Loop: {UPDATE_INTERVAL}s")
         logger.info("=" * 80)
@@ -1090,7 +1090,7 @@ class TradingBot:
             rl = self.rl_agent.get_stats()
 
             logger.info(f"\n{'='*60}")
-            logger.info(f"  SHUTDOWN v7.1 {BOT_MODE} + Deep RL | Port: {DASHBOARD_PORT}")
+            logger.info(f"  SHUTDOWN {BOT_VERSION} {BOT_MODE} + Deep RL | Port: {DASHBOARD_PORT}")
             logger.info(f"{'='*60}")
             logger.info(f"  Start:      ${self.start_balance:.2f}")
             logger.info(f"  Final:      ${ai['equity']:.2f} ({growth:+.1f}%)")
