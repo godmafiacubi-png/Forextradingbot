@@ -190,9 +190,11 @@ class RiskGuard:
         try:
             si = self.mt5.get_symbol_info(symbol)
             if si is None:
-                return True, 0, 0
+                return False, 0, 0
 
             current_spread = si.get('spread', 0)
+            if current_spread <= 0:
+                return False, current_spread, 0
             ask = si.get('ask', 0)
             bid = si.get('bid', 0)
             if ask > 0 and bid > 0:
@@ -202,8 +204,9 @@ class RiskGuard:
 
             # Track spread history
             self.spread_history[symbol].append(current_spread)
-            if len(self.spread_history[symbol]) > self.cfg.get('SPREAD_AVG_PERIOD', 50):
-                self.spread_history[symbol] = self.spread_history[symbol][-50:]
+            spread_period = self.cfg.get('SPREAD_AVG_PERIOD', 50)
+            if len(self.spread_history[symbol]) > spread_period:
+                self.spread_history[symbol] = self.spread_history[symbol][-spread_period:]
 
             # Calculate average
             history = self.spread_history[symbol]
@@ -220,7 +223,7 @@ class RiskGuard:
 
         except Exception as e:
             logger.debug(f"Spread check error: {e}")
-            return True, 0, 0
+            return False, 0, 0
 
     # ================================================================
     # 3. SESSION FILTER

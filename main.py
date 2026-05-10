@@ -75,7 +75,9 @@ RISK_CONFIG = {
     'PARTIAL_CLOSE_2_PCT': PARTIAL_CLOSE_2_PCT,
     'ACCOUNT_RISK_PERCENT': ACCOUNT_RISK_PERCENT,
     'MAX_OPEN_TRADES': MAX_OPEN_TRADES,
+    'MAX_LOT_SIZE': MAX_LOT_SIZE,
 }
+
 
 # Quality threshold จาก config (ถ้ามี)
 MIN_QUALITY_SCORE = getattr(
@@ -241,8 +243,15 @@ class TradingBot:
             logger.info("[OK] Risk Guard")
 
             self.signal_gen = SignalGenerator(self.ml_model)
-            self.position_sizer = PositionSizer(POSITION_SIZING_METHOD, ACCOUNT_RISK_PERCENT, MAX_DRAWDOWN_PERCENT)
-            self.order_manager = OrderManager(self.mt5, MAX_OPEN_TRADES, MAX_TRADES_PER_SYMBOL)
+            self.position_sizer = PositionSizer(POSITION_SIZING_METHOD, ACCOUNT_RISK_PERCENT, MAX_DRAWDOWN_PERCENT, max_lot_size=MAX_LOT_SIZE)
+            self.order_manager = OrderManager(
+                self.mt5,
+                MAX_OPEN_TRADES,
+                MAX_TRADES_PER_SYMBOL,
+                dry_run=DRY_RUN,
+                magic=ORDER_MAGIC,
+                deviation=ORDER_DEVIATION,
+            )
             self.monitor = SimpleMonitor()
             self.tracker = PerformanceTracker()
             self.telegram = TelegramAlerts(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
@@ -287,6 +296,7 @@ class TradingBot:
             logger.info(f"[OK] BOT v7.1 READY — {BOT_MODE} + Deep RL")
             logger.info(f"[OK] BE_ATR={BREAKEVEN_ATR} TRAIL_ATR={TRAILING_STOP_ATR} | Trailing: 5s thread")
             logger.info(f"[OK] Dashboard: http://localhost:{DASHBOARD_PORT}")
+            logger.info(f"[OK] Execution: {'DRY RUN (no orders sent)' if DRY_RUN else 'LIVE ORDERS ENABLED'} | Magic={ORDER_MAGIC}")
             logger.info("=" * 80)
 
         except Exception as e:
@@ -517,6 +527,8 @@ class TradingBot:
 
     def _stop_trailing_thread(self):
         self._trailing_running = False
+        if self._trailing_thread and self._trailing_thread.is_alive():
+            self._trailing_thread.join(timeout=10)
 
     def _apply_news_protection_all(self):
         try:
@@ -588,7 +600,7 @@ class TradingBot:
             pos_list = []
             for p in (self.order_manager.get_open_positions() or []):
                 si = self.mt5.get_symbol_info(p.symbol)
-                cur = si['bid'] if p.type == 0 else si['ask'] if si else 0
+                cur = (si['bid'] if p.type == 0 else si['ask']) if si else 0
                 pos_list.append({
                     'ticket': p.ticket, 'symbol': p.symbol,
                     'side': 'BUY' if p.type == 0 else 'SELL',

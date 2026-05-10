@@ -36,3 +36,18 @@ def test_dashboard_port_defaults_to_documented_port(monkeypatch):
     settings = _load_settings(monkeypatch)
 
     assert settings.DASHBOARD_PORT == 5001
+
+
+def test_execution_safety_env_values_are_parsed(monkeypatch):
+    monkeypatch.setenv("DRY_RUN", "true")
+    monkeypatch.setenv("ORDER_MAGIC", "98765")
+    monkeypatch.setenv("ORDER_DEVIATION", "7")
+    monkeypatch.setenv("MAX_LOT_SIZE", "0.25")
+
+    settings = _load_settings(monkeypatch)
+
+    assert settings.DRY_RUN is True
+    assert settings.ORDER_MAGIC == 98765
+    assert settings.ORDER_DEVIATION == 7
+    assert settings.MAX_LOT_SIZE == 0.25
+    assert settings.SYMBOL_POINTS["USDJPYm"] == 0.001

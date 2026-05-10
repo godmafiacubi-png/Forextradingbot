@@ -39,7 +39,10 @@ Edit `.env` with your MT5 credentials and notification settings. Do not commit `
 | `TELEGRAM_TOKEN` | Optional | Telegram bot token for alerts. |
 | `TELEGRAM_CHAT_ID` | Optional | Telegram chat ID for alerts. |
 | `DASHBOARD_PORT` | Optional | Dashboard port; default is `5001`. |
-| `DRY_RUN` | Recommended for smoke tests | Use `true` while validating setup before live trading. |
+| `DRY_RUN` | Recommended for smoke tests | Use `true` while validating setup before live trading; the bot logs intended orders without sending them to MT5. |
+| `ORDER_MAGIC` | Optional | MT5 magic number used on bot-managed orders; default `123456`. |
+| `ORDER_DEVIATION` | Optional | Maximum order price deviation in points; default `20`. |
+| `MAX_LOT_SIZE` | Optional | Global hard cap for calculated lot size; default `2.0`. |
 
 ## Running
 
@@ -77,5 +80,5 @@ Backtest utilities live in `backtest/`, and historical report artifacts are stor
 
 - Many runtime paths intentionally fall back on exceptions to keep the bot alive. For critical live incidents, prefer logging full error context and tracebacks when tightening those paths.
 - Model files loaded through pickle/joblib/PyTorch should be treated as trusted artifacts only.
-- Review risk settings in `config/settings.py`, especially daily loss limits, max open trades, spread filters, session filters, and per-symbol settings.
+- Review risk settings in `config/settings.py`, especially dry-run/live mode, daily loss limits, max open trades, spread filters, session filters, max lot size, and per-symbol settings.
 - Start with demo trading plus `DRY_RUN=true`, then validate fills, spreads, SL/TP placement, and Telegram/dashboard telemetry manually.
