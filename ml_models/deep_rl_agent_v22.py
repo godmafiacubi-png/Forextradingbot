@@ -192,13 +192,47 @@ if TORCH_AVAILABLE:
         def _get_symbol_idx(self, symbol: str) -> int:
             return self.symbol_to_idx.get(symbol, self.symbol_to_idx["__default__"])
 
-        def forward(self, state, symbol: str = "__default__"):
-            latent = self.shared_encoder(state)
+        def _forward_head(self, latent, symbol: str):
             idx = self._get_symbol_idx(symbol)
             sym_emb = self.symbol_embedding(
-                torch.tensor([idx], device=state.device).expand(state.size(0))
+                torch.full(
+                    (latent.size(0),), idx, device=latent.device, dtype=torch.long
+                )
             )
             return self.heads[idx](latent, sym_emb)
+
+        def forward(self, state, symbol: str = "__default__"):
+            latent = self.shared_encoder(state)
+            return self._forward_head(latent, symbol)
+
+        def forward_batch(self, state, symbols):
+            """Vectorized cross-symbol forward pass for replay batches.
+
+            The shared encoder is evaluated once for the full batch, then only
+            the lightweight symbol heads are applied to their grouped rows.
+            This keeps symbol-specific gradients intact while avoiding repeated
+            backbone passes for multi-symbol replay samples.
+            """
+            latent = self.shared_encoder(state)
+            symbol_keys = np.array([
+                symbol if symbol in self.symbol_to_idx else "__default__"
+                for symbol in symbols
+            ])
+
+            q_parts = []
+            order_parts = []
+            for sym in np.unique(symbol_keys):
+                row_idx_np = np.where(symbol_keys == sym)[0]
+                row_idx = torch.as_tensor(
+                    row_idx_np, device=state.device, dtype=torch.long
+                )
+                q_parts.append(
+                    self._forward_head(latent.index_select(0, row_idx), sym)
+                )
+                order_parts.append(row_idx)
+
+            restore_order = torch.argsort(torch.cat(order_parts))
+            return torch.cat(q_parts, dim=0).index_select(0, restore_order)
 
         def reset_noise(self):
             for head in self.heads:
@@ -378,7 +412,8 @@ class DeepRLTradingAgent:
             peak = self.reward_calculator.peak_equity if self.reward_calculator else 0
             f21 = np.clip((peak - equity) / max(peak, 1), 0, 1) if peak > 0 and equity > 0 else 0.0
 
-            sp = self.symbol_performance.get(symbol, {})
+            symbol_key = self._symbol_key(symbol)
+            sp = self.symbol_performance.get(symbol_key, {})
             sym_trades = max(sp.get("trades", 0), 1)
             f22 = sp.get("wins", 0) / sym_trades
             rewards_list = sp.get("rewards", [0])
@@ -622,32 +657,22 @@ class DeepRLTradingAgent:
         weights_t = torch.FloatTensor(weights).unsqueeze(1).to(self.device)
 
         if self.use_cross_symbol:
-            # Replay batches can contain multiple symbols. Evaluate each grouped
-            # slice with its corresponding head, then restore the original order
-            # while keeping gradients connected to the selected head outputs.
+            # Replay batches can contain multiple symbols. Run the shared encoder
+            # once per tensor and dispatch only the lightweight symbol heads per
+            # group, preserving symbol-specific gradients without repeated
+            # backbone passes.
             symbol_keys = np.array([self._symbol_key(sym) for sym in symbols])
-            current_q_parts = []
-            next_q_parts = []
-            order_parts = []
-            for sym in np.unique(symbol_keys):
-                row_idx_np = np.where(symbol_keys == sym)[0]
-                row_idx = torch.as_tensor(row_idx_np, device=self.device, dtype=torch.long)
-                batch_states = states_t.index_select(0, row_idx)
-                batch_next_states = next_states_t.index_select(0, row_idx)
-                batch_actions = actions_t.index_select(0, row_idx)
-                current_q_parts.append(
-                    self.policy_net(batch_states, symbol=sym).gather(1, batch_actions)
+            all_current_q = self.policy_net.forward_batch(states_t, symbol_keys)
+            current_q = all_current_q.gather(1, actions_t)
+            with torch.no_grad():
+                all_next_policy_q = self.policy_net.forward_batch(
+                    next_states_t, symbol_keys
                 )
-                with torch.no_grad():
-                    next_actions = self.policy_net(batch_next_states, symbol=sym).argmax(1, keepdim=True)
-                    next_q_parts.append(
-                        self.target_net(batch_next_states, symbol=sym).gather(1, next_actions)
-                    )
-                order_parts.append(row_idx)
-
-            restore_order = torch.argsort(torch.cat(order_parts))
-            current_q = torch.cat(current_q_parts, dim=0).index_select(0, restore_order)
-            next_q = torch.cat(next_q_parts, dim=0).index_select(0, restore_order)
+                next_actions = all_next_policy_q.argmax(1, keepdim=True)
+                all_next_target_q = self.target_net.forward_batch(
+                    next_states_t, symbol_keys
+                )
+                next_q = all_next_target_q.gather(1, next_actions)
         else:
             current_q = self.policy_net(states_t).gather(1, actions_t)
             with torch.no_grad():
