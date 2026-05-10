@@ -26,7 +26,9 @@ class RiskGuard:
 
         # Daily tracking
         self.daily_start_balance = 0
+        self.daily_start_equity = 0
         self.daily_pnl = 0.0
+        self.daily_equity_pnl = 0.0
         self.daily_trades = 0
         self.daily_wins = 0
         self.daily_losses = 0
@@ -56,9 +58,11 @@ class RiskGuard:
             try:
                 ai = self.mt5.get_account_info()
                 self.daily_start_balance = ai.get('balance', 0)
+                self.daily_start_equity = ai.get('equity', self.daily_start_balance)
             except Exception:
                 pass
             self.daily_pnl = 0.0
+            self.daily_equity_pnl = 0.0
             self.daily_trades = 0
             self.daily_wins = 0
             self.daily_losses = 0
@@ -100,8 +104,11 @@ class RiskGuard:
         try:
             ai = self.mt5.get_account_info()
             current_balance = ai.get('balance', 0)
+            current_equity = ai.get('equity', current_balance)
             if self.daily_start_balance > 0:
                 self.daily_pnl = current_balance - self.daily_start_balance
+            if self.daily_start_equity > 0:
+                self.daily_equity_pnl = current_equity - self.daily_start_equity
         except Exception:
             pass
 
@@ -195,6 +202,12 @@ class RiskGuard:
             current_spread = si.get('spread', 0)
             if current_spread <= 0:
                 return False, current_spread, 0
+
+            max_spread_points = self.cfg.get('MAX_SPREAD_POINTS', {}).get(
+                symbol, self.cfg.get('DEFAULT_MAX_SPREAD_POINTS')
+            )
+            if max_spread_points is not None and current_spread > max_spread_points:
+                return False, current_spread, 0
             ask = si.get('ask', 0)
             bid = si.get('bid', 0)
             if ask > 0 and bid > 0:
@@ -272,15 +285,16 @@ class RiskGuard:
         Returns: (allowed, reason)
         """
         try:
-            if self.daily_start_balance <= 0:
+            if self.daily_start_balance <= 0 and self.daily_start_equity <= 0:
                 return True, ''
 
-            daily_pnl_pct = (self.daily_pnl / self.daily_start_balance) * 100
+            balance_pct = (self.daily_pnl / self.daily_start_balance) * 100 if self.daily_start_balance > 0 else 0
+            equity_pct = (self.daily_equity_pnl / self.daily_start_equity) * 100 if self.daily_start_equity > 0 else balance_pct
 
-            # Daily loss limit
+            # Daily loss limit is equity-based so open floating losses stop new risk immediately.
             loss_limit = self.cfg.get('DAILY_LOSS_LIMIT_PCT', 3.0)
-            if daily_pnl_pct <= -loss_limit:
-                return False, f"Daily loss limit: {daily_pnl_pct:.1f}% (max -{loss_limit}%)"
+            if equity_pct <= -loss_limit:
+                return False, f"Daily equity loss limit: {equity_pct:.1f}% (max -{loss_limit}%)"
 
             return True, ''
         except Exception:
@@ -445,11 +459,14 @@ class RiskGuard:
             dd = 0
 
         daily_pct = (self.daily_pnl / self.daily_start_balance * 100) if self.daily_start_balance > 0 else 0
+        daily_equity_pct = (self.daily_equity_pnl / self.daily_start_equity * 100) if self.daily_start_equity > 0 else daily_pct
         risk_pct, max_trades = self.get_risk_adjusted_params()
 
         return {
             'daily_pnl': self.daily_pnl,
             'daily_pnl_pct': daily_pct,
+            'daily_equity_pnl': self.daily_equity_pnl,
+            'daily_equity_pnl_pct': daily_equity_pct,
             'daily_trades': self.daily_trades,
             'daily_wins': self.daily_wins,
             'daily_losses': self.daily_losses,

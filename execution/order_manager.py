@@ -114,7 +114,8 @@ class OrderManager:
             return None
         return mt5.order_send(request)
 
-    def place_order(self, symbol, order_type, volume, stop_loss, take_profit, comment=""):
+    def place_order(self, symbol, order_type, volume, stop_loss, take_profit, comment="",
+                    reference_price=None, max_slippage_points=None):
         try:
             if not self.can_open_trade(symbol):
                 logger.info(f"[SKIP] {symbol} position limit reached")
@@ -125,6 +126,15 @@ class OrderManager:
                 return None
 
             price = si['ask'] if order_type == mt5.ORDER_TYPE_BUY else si['bid']
+            point = si.get('point', 0)
+            if reference_price is not None and max_slippage_points is not None and point > 0:
+                slippage_points = abs(price - reference_price) / point
+                if slippage_points > max_slippage_points:
+                    logger.warning(
+                        f"[SKIP] {symbol} slippage guard: {slippage_points:.1f}pts > {max_slippage_points}pts "
+                        f"(ref={reference_price}, exec={price})"
+                    )
+                    return None
             digits = self._get_digits(symbol)
             stop_loss = round(stop_loss, digits)
             take_profit = round(take_profit, digits)

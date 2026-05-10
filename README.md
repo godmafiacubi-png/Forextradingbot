@@ -39,10 +39,13 @@ Edit `.env` with your MT5 credentials and notification settings. Do not commit `
 | `TELEGRAM_TOKEN` | Optional | Telegram bot token for alerts. |
 | `TELEGRAM_CHAT_ID` | Optional | Telegram chat ID for alerts. |
 | `DASHBOARD_PORT` | Optional | Dashboard port; default is `5001`. |
-| `DRY_RUN` | Recommended for smoke tests | Use `true` while validating setup before live trading; the bot logs intended orders without sending them to MT5. |
+| `DRY_RUN` | Recommended for smoke tests | Defaults to `true`. Set `false` only when intentionally enabling live order routing. |
+| `LIVE_TRADING_CONFIRMED` | Live trading | Must be `true` together with `DRY_RUN=false`; otherwise the bot stays in dry-run mode as a fail-safe. |
 | `ORDER_MAGIC` | Optional | MT5 magic number used on bot-managed orders; default `123456`. |
 | `ORDER_DEVIATION` | Optional | Maximum order price deviation in points; default `20`. |
 | `MAX_LOT_SIZE` | Optional | Global hard cap for calculated lot size; default `2.0`. |
+| `MAX_SPREAD_POINTS` | Code config | Per-symbol absolute spread caps in `config/settings.py`; trades are blocked above the cap. |
+| `MAX_SLIPPAGE_POINTS` | Code config | Per-symbol max execution slippage caps in `config/settings.py`; order send is skipped above the cap. |
 
 ## Running
 
@@ -80,5 +83,5 @@ Backtest utilities live in `backtest/`, and historical report artifacts are stor
 
 - Many runtime paths intentionally fall back on exceptions to keep the bot alive. For critical live incidents, prefer logging full error context and tracebacks when tightening those paths.
 - Model files loaded through pickle/joblib/PyTorch should be treated as trusted artifacts only.
-- Review risk settings in `config/settings.py`, especially dry-run/live mode, daily loss limits, max open trades, spread filters, session filters, max lot size, and per-symbol settings.
+- Review risk settings in `config/settings.py`, especially dry-run/live confirmation, equity-based daily loss limits, max open trades, spread/slippage filters, session filters, max lot size, and per-symbol settings.
 - Start with demo trading plus `DRY_RUN=true`, then validate fills, spreads, SL/TP placement, and Telegram/dashboard telemetry manually.

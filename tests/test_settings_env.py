@@ -38,6 +38,26 @@ def test_dashboard_port_defaults_to_documented_port(monkeypatch):
     assert settings.DASHBOARD_PORT == 5001
 
 
+def test_live_trading_requires_explicit_confirmation(monkeypatch):
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    monkeypatch.delenv("LIVE_TRADING_CONFIRMED", raising=False)
+
+    settings = _load_settings(monkeypatch)
+
+    assert settings.DRY_RUN_REQUESTED is True
+    assert settings.LIVE_TRADING_CONFIRMED is False
+    assert settings.DRY_RUN is True
+
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("LIVE_TRADING_CONFIRMED", "true")
+
+    settings = _load_settings(monkeypatch)
+
+    assert settings.DRY_RUN_REQUESTED is False
+    assert settings.LIVE_TRADING_CONFIRMED is True
+    assert settings.DRY_RUN is False
+
+
 def test_execution_safety_env_values_are_parsed(monkeypatch):
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.setenv("ORDER_MAGIC", "98765")
@@ -46,10 +66,14 @@ def test_execution_safety_env_values_are_parsed(monkeypatch):
 
     settings = _load_settings(monkeypatch)
 
+    assert settings.DRY_RUN_REQUESTED is True
+    assert settings.LIVE_TRADING_CONFIRMED is False
     assert settings.DRY_RUN is True
     assert settings.ORDER_MAGIC == 98765
     assert settings.ORDER_DEVIATION == 7
     assert settings.MAX_LOT_SIZE == 0.25
+    assert settings.MAX_SPREAD_POINTS["EURUSDm"] > 0
+    assert settings.MAX_SLIPPAGE_POINTS["EURUSDm"] > 0
     assert settings.SYMBOL_POINTS["USDJPYm"] == 0.001
 
 

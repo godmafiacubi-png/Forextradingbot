@@ -54,7 +54,8 @@ class PositionSizer:
         return float(round(rounded, decimals))
 
     def calculate_position_size(self, account_balance, atr_value, symbol_point,
-                                confidence=1.0, method=None, symbol=None):
+                                confidence=1.0, method=None, symbol=None,
+                                sl_multiplier=1.0):
         """
         คำนวณ lot size
         ถ้ามี symbol → ดึง point + tick_value จาก MT5 โดยตรง
@@ -83,7 +84,7 @@ class PositionSizer:
         elif method == 'KELLY':
             lot_size = self.kelly_sizing(account_balance, win_rate=0.55)
         elif method == 'ATR':
-            lot_size = self.atr_sizing(account_balance, atr_value, symbol_point, sym_info)
+            lot_size = self.atr_sizing(account_balance, atr_value, symbol_point, sym_info, sl_multiplier)
         else:
             lot_size = 0.01
 
@@ -133,14 +134,14 @@ class PositionSizer:
         lot_size = account_balance * safe_fraction / 100000
         return max(min(lot_size, 1.0), 0.01)
 
-    def atr_sizing(self, account_balance, atr_value, symbol_point, sym_info=None):
+    def atr_sizing(self, account_balance, atr_value, symbol_point, sym_info=None, sl_multiplier=1.0):
         """
         ATR-based position sizing
         ใช้ tick_value จาก MT5 ถ้ามี → แม่นยำทุก symbol
         """
         risk_amount = account_balance * (self.account_risk / 100)
 
-        sl_distance = atr_value * 1.0  # 1x ATR
+        sl_distance = atr_value * max(float(sl_multiplier or 1.0), 0.0)
 
         if sl_distance <= 0 or symbol_point <= 0:
             return 0.0
