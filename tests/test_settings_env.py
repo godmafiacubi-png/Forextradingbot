@@ -51,3 +51,24 @@ def test_execution_safety_env_values_are_parsed(monkeypatch):
     assert settings.ORDER_DEVIATION == 7
     assert settings.MAX_LOT_SIZE == 0.25
     assert settings.SYMBOL_POINTS["USDJPYm"] == 0.001
+
+
+def test_symbol_settings_cover_all_configured_symbols(monkeypatch):
+    settings = _load_settings(monkeypatch)
+
+    configured_symbols = {
+        symbol
+        for group_symbols in settings.SYMBOLS.values()
+        for symbol in group_symbols
+    }
+
+    assert set(settings.SYMBOL_SETTINGS) == configured_symbols
+
+    for symbol in configured_symbols:
+        cfg = settings.get_symbol_config(symbol)
+        assert 0 < cfg["risk_pct"] <= settings.ACCOUNT_RISK_PERCENT
+        assert cfg["sl_atr_mult"] > 0
+        assert cfg["tp_atr_mult"] > cfg["sl_atr_mult"]
+        assert 0 < cfg["ml_sell_threshold"] < cfg["ml_buy_threshold"] < 1
+        assert 0 < cfg["min_confidence"] < 1
+        assert cfg["max_per_symbol"] == 1
