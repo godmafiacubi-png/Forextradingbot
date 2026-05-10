@@ -116,6 +116,31 @@ def _format_number(value: Any, decimals: int = 2) -> str:
         return str(value)
 
 
+def _format_dashboard_value(key: Any, value: Any) -> str:
+    """Format scalar dashboard values so operators can scan them quickly."""
+    key_text = str(key).lower()
+    if value in (None, ''):
+        return '—'
+    if isinstance(value, bool):
+        return 'Yes' if value else 'No'
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if key_text.endswith(('pct', 'percent')):
+            return f"{float(value):,.2f}%"
+        if 'rate' in key_text or 'confidence' in key_text:
+            numeric = float(value)
+            if abs(numeric) <= 1:
+                numeric *= 100
+            return f"{numeric:,.2f}%"
+        if any(token in key_text for token in ('price', 'entry', 'current', 'sl', 'tp')):
+            return _format_number(value, 5)
+        if any(token in key_text for token in ('adx', 'rsi', 'spread', 'atr', 'profit', 'pnl', 'balance', 'equity')):
+            return _format_number(value, 2)
+        if float(value).is_integer():
+            return f"{int(value):,}"
+        return _format_number(value, 4)
+    return str(value)
+
+
 def _json_summary(value: Any) -> str:
     if value in (None, '', [], {}):
         return '—'
@@ -139,10 +164,29 @@ def _render_kv_table(data: Any, empty: str = 'No data yet.') -> str:
         return f'<tr><td colspan="2" class="muted">{escape(empty)}</td></tr>'
     rows = []
     for key, value in data.items():
+        label = escape(str(key).replace('_', ' ').title())
+        if isinstance(value, dict) and value:
+            compact_items = ''.join(
+                '<div class="kv-chip">'
+                f'<span>{escape(str(child_key).replace("_", " "))}</span>'
+                f'<strong>{escape(_format_dashboard_value(child_key, child_value))}</strong>'
+                '</div>'
+                for child_key, child_value in value.items()
+                if not isinstance(child_value, (dict, list, tuple))
+            )
+            details = escape(_json_summary(value))
+            value_html = (
+                f'<div class="kv-chips">{compact_items}</div>'
+                f'<details><summary>Raw data</summary><pre>{details}</pre></details>'
+            ) if compact_items else f'<pre>{details}</pre>'
+        elif isinstance(value, (list, tuple)):
+            value_html = f'<pre>{escape(_json_summary(value))}</pre>'
+        else:
+            value_html = f'<span class="scalar {_badge_class(value)}">{escape(_format_dashboard_value(key, value))}</span>'
         rows.append(
             '<tr>'
-            f'<th>{escape(str(key).replace("_", " ").title())}</th>'
-            f'<td><pre>{escape(_json_summary(value))}</pre></td>'
+            f'<th>{label}</th>'
+            f'<td>{value_html}</td>'
             '</tr>'
         )
     return ''.join(rows)
@@ -216,16 +260,22 @@ def _render_html() -> str:
     .pill, .badge {{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 12px; font-weight:700; font-size:.85rem; border:1px solid var(--line); background:rgba(255,255,255,.04); }}
     .positive {{ color:var(--green); }} .negative {{ color:var(--red); }} .neutral {{ color:var(--amber); }} .muted {{ color:var(--muted); }}
     .grid {{ display:grid; grid-template-columns: repeat(12, 1fr); gap:16px; }}
-    .card {{ grid-column: span 12; background:linear-gradient(180deg, rgba(19,36,58,.92), rgba(12,24,40,.92)); border:1px solid var(--line); border-radius:22px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.25); }}
+    .card {{ grid-column: span 12; background:linear-gradient(180deg, rgba(19,36,58,.92), rgba(12,24,40,.92)); border:1px solid var(--line); border-radius:22px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.25); min-width:0; }}
     .span-3 {{ grid-column: span 3; }} .span-4 {{ grid-column: span 4; }} .span-6 {{ grid-column: span 6; }} .span-8 {{ grid-column: span 8; }}
     .metric {{ min-height:128px; display:flex; flex-direction:column; justify-content:space-between; }}
     .label {{ color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.12em; }}
     .value {{ font-size:clamp(1.5rem, 3vw, 2.5rem); font-weight:800; letter-spacing:-.04em; margin-top:8px; }}
     .hint {{ color:var(--muted); font-size:.86rem; margin-top:10px; }}
+    .table-scroll {{ overflow:auto; max-height:520px; }}
     table {{ width:100%; border-collapse:collapse; overflow:hidden; }}
     th, td {{ border-bottom:1px solid rgba(147,168,194,.18); padding:12px 10px; text-align:left; vertical-align:top; }}
     th {{ color:#bdd2ee; font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; }}
     pre {{ white-space:pre-wrap; word-break:break-word; margin:0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#dcecff; }}
+    details {{ margin-top:8px; }} details summary {{ cursor:pointer; color:var(--muted); font-size:.78rem; }}
+    .kv-chips {{ display:flex; flex-wrap:wrap; gap:8px; }}
+    .kv-chip {{ display:flex; gap:6px; align-items:baseline; border:1px solid rgba(147,168,194,.16); background:rgba(255,255,255,.035); border-radius:10px; padding:6px 8px; }}
+    .kv-chip span {{ color:var(--muted); font-size:.72rem; text-transform:uppercase; }}
+    .kv-chip strong, .scalar {{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
     ul {{ padding-left:1.1rem; margin:0; max-height:420px; overflow:auto; }}
     li {{ margin:.48rem 0; }} li span {{ color:var(--blue); font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
     .toolbar {{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }}
@@ -255,38 +305,38 @@ def _render_html() -> str:
 
       <article class="card span-8">
         <h2>Open Positions ({len(open_positions)})</h2>
-        <table><thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Current</th><th>SL</th><th>PnL</th></tr></thead><tbody>{_render_positions()}</tbody></table>
+        <div class="table-scroll"><table><thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Current</th><th>SL</th><th>PnL</th></tr></thead><tbody>{_render_positions()}</tbody></table></div>
       </article>
       <article class="card span-4">
         <h2>Risk Guard</h2>
-        <table><tbody>{_render_kv_table(dashboard_state.get('risk_guard'), 'Risk status has not been reported yet.')}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('risk_guard'), 'Risk status has not been reported yet.')}</tbody></table></div>
       </article>
 
       <article class="card span-6">
         <h2>Signals</h2>
-        <table><tbody>{_render_kv_table(dashboard_state.get('signals'), 'No signal data yet.')}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('signals'), 'No signal data yet.')}</tbody></table></div>
       </article>
       <article class="card span-6">
         <h2>Symbols</h2>
-        <table><tbody>{_render_kv_table(dashboard_state.get('symbols'), 'No symbol data yet.')}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('symbols'), 'No symbol data yet.')}</tbody></table></div>
       </article>
 
       <article class="card span-4">
         <h2>Performance</h2>
-        <table><tbody>{_render_kv_table(dashboard_state.get('tracker_stats'), 'No closed-trade statistics yet.')}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('tracker_stats'), 'No closed-trade statistics yet.')}</tbody></table></div>
       </article>
       <article class="card span-4">
         <h2>Quality / M30</h2>
-        <table><tbody>{_render_kv_table({'quality': dashboard_state.get('quality_stats'), 'm30': dashboard_state.get('m30_stats')})}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table({'quality': dashboard_state.get('quality_stats'), 'm30': dashboard_state.get('m30_stats')})}</tbody></table></div>
       </article>
       <article class="card span-4">
         <h2>AI / Regime</h2>
-        <table><tbody>{_render_kv_table({'rl': dashboard_state.get('rl_stats'), 'regime': dashboard_state.get('regime_stats')})}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table({'rl': dashboard_state.get('rl_stats'), 'regime': dashboard_state.get('regime_stats')})}</tbody></table></div>
       </article>
 
       <article class="card span-6">
         <h2>Adaptive Controls</h2>
-        <table><tbody>{_render_kv_table({'adaptive': dashboard_state.get('adaptive'), 'streak': dashboard_state.get('streak'), 'auto_adjust': dashboard_state.get('auto_adjust')})}</tbody></table>
+        <div class="table-scroll"><table><tbody>{_render_kv_table({'adaptive': dashboard_state.get('adaptive'), 'streak': dashboard_state.get('streak'), 'auto_adjust': dashboard_state.get('auto_adjust')})}</tbody></table></div>
       </article>
       <article class="card span-6">
         <h2>Recent Logs</h2>

@@ -613,6 +613,19 @@ class TradingBot:
                 })
             update_dashboard('open_positions', pos_list)
 
+            symbol_snapshot = {
+                key: value
+                for key, value in self.symbol_data_cache.items()
+                if not str(key).endswith('_signal')
+            }
+            signal_snapshot = {
+                str(key)[:-7]: value
+                for key, value in self.symbol_data_cache.items()
+                if str(key).endswith('_signal')
+            }
+            update_dashboard('symbols', symbol_snapshot)
+            update_dashboard('signals', signal_snapshot)
+
             tracker_stats = self.tracker.get_stats()
             if tracker_stats:
                 update_dashboard('tracker_stats', tracker_stats)
@@ -728,7 +741,11 @@ class TradingBot:
                 if pos:
                     pnl_pct = pos[0].profit / (pos[0].price_open * pos[0].volume * 100000 + 1e-10)
 
-            sig_data = {'ml_prob': ml_prob, 'confidence': base_conf}
+            sig_data = {
+                'ml_prob': ml_prob,
+                'confidence': base_conf,
+                'base_signal': 'BUY' if base_signal == 1 else ('SELL' if base_signal == -1 else 'HOLD'),
+            }
 
             # ---- คำนวณ Swing Low / Swing High (20 bars) สำหรับ near-SR check ----
             lookback = min(100, len(df))
@@ -911,6 +928,24 @@ class TradingBot:
                 logger.info(f"  │ Quality: {quality_icon} {quality_grade} ({quality_score}/100) min={MIN_QUALITY_SCORE}")
 
             logger.info(f"  │ Final: {signal_name} ({confidence:.2%})")
+
+            sig_data.update({
+                'signal': signal_name,
+                'confidence': round(float(confidence), 4),
+                'base_confidence': round(float(base_conf), 4),
+                'blocked': blocked or '',
+                'regime': regime_name,
+                'quality_grade': quality_grade,
+                'quality_score': quality_score,
+                'm30': m30_reason,
+                'rl_action': rl_name,
+                'source': rl_src,
+                'spread': round(float(cur_spread), 2),
+                'avg_spread': round(float(avg_spread), 2),
+                'adx': round(float(adx), 2),
+                'rsi': round(float(rsi), 2),
+                'updated': datetime.now().strftime('%H:%M:%S'),
+            })
 
             if blocked:
                 logger.info(f"  │ >> NO TRADE: {blocked}")
