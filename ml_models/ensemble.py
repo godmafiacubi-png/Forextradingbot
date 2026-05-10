@@ -14,7 +14,7 @@ import pandas as pd
 from typing import Optional, Dict, List
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import log_loss
+from sklearn.metrics import log_loss, brier_score_loss
 import xgboost as xgb
 
 from .regime_aware_ensemble import RegimeAwareEnsemble
@@ -215,7 +215,6 @@ class EnsembleModel:
             medians = raw_X.median(numeric_only=True).fillna(0.0)
             self.feature_medians = {col: float(medians.get(col, 0.0)) for col in feature_cols}
             X = raw_X.fillna(medians).values.astype(np.float32)
-            X = self.scaler.fit_transform(X)
 
             # หา close column — รองรับทุก naming convention
             close_col = None
@@ -295,43 +294,92 @@ class EnsembleModel:
         return True
 
 
+    def _class_balance_params(self, y: np.ndarray) -> Dict[str, float]:
+        """Return stable class-balance settings for imbalanced market labels."""
+        pos = int(np.sum(y == 1))
+        neg = int(np.sum(y == 0))
+        if pos == 0 or neg == 0:
+            return {"scale_pos_weight": 1.0, "pos_weight": 1.0, "neg_weight": 1.0}
+
+        scale_pos_weight = float(np.clip(neg / pos, 0.25, 4.0))
+        total = len(y)
+        pos_weight = float(np.clip(total / (2.0 * pos), 0.25, 4.0))
+        neg_weight = float(np.clip(total / (2.0 * neg), 0.25, 4.0))
+        return {
+            "scale_pos_weight": scale_pos_weight,
+            "pos_weight": pos_weight,
+            "neg_weight": neg_weight,
+        }
+
+    def _sample_weights(self, y: np.ndarray) -> np.ndarray:
+        balance = self._class_balance_params(y)
+        return np.where(y == 1, balance["pos_weight"], balance["neg_weight"]).astype(np.float32)
+
+    def _configure_class_balance(self, y: np.ndarray):
+        """Apply class-balance hints to learners before every fit."""
+        balance = self._class_balance_params(y)
+        try:
+            self.xgb_model.set_params(scale_pos_weight=balance["scale_pos_weight"])
+        except Exception as exc:
+            logger.debug(f"[Train] Could not set XGB scale_pos_weight: {exc}")
+        try:
+            self.rf_model.set_params(class_weight={0: balance["neg_weight"], 1: balance["pos_weight"]})
+        except Exception as exc:
+            logger.debug(f"[Train] Could not set RF class_weight: {exc}")
+        self.validation_metrics["class_balance"] = {
+            "positive_weight": round(balance["pos_weight"], 4),
+            "negative_weight": round(balance["neg_weight"], 4),
+            "xgb_scale_pos_weight": round(balance["scale_pos_weight"], 4),
+        }
+
+    def _fit_model_pair(self, X: np.ndarray, y: np.ndarray):
+        self._configure_class_balance(y)
+        self.xgb_model.fit(X, y, verbose=False)
+        self.rf_model.fit(X, y)
+
     def _fit_base_models_with_validation(self, X: np.ndarray, y: np.ndarray):
         """Fit base learners and derive validation-aware blend weights.
 
-        The live ensemble used to average XGBoost and RandomForest equally. That
-        can over-trust a weak learner after market-regime drift. We keep the
-        training API unchanged, reserve a chronological validation slice when
-        enough data is available, convert validation log-loss into robust model
-        weights, then refit both learners on all available samples.
+        Uses a chronological validation slice without scaler leakage, class-balanced
+        learner settings for imbalanced up/down labels, then refits both learners
+        on all available samples with a production scaler.
         """
         self.model_weights = {"xgb": 0.5, "rf": 0.5}
         self.validation_metrics = {}
 
         if len(y) < 80 or len(np.unique(y)) < 2:
-            self.xgb_model.fit(X, y, verbose=False)
-            self.rf_model.fit(X, y)
+            X_full = self.scaler.fit_transform(X)
+            self._fit_model_pair(X_full, y)
             return
 
         split_idx = max(int(len(y) * 0.8), len(y) - 250)
         split_idx = min(max(split_idx, 40), len(y) - 20)
-        X_train, X_val = X[:split_idx], X[split_idx:]
+        X_train_raw, X_val_raw = X[:split_idx], X[split_idx:]
         y_train, y_val = y[:split_idx], y[split_idx:]
 
         if len(np.unique(y_train)) < 2 or len(np.unique(y_val)) < 2:
-            self.xgb_model.fit(X, y, verbose=False)
-            self.rf_model.fit(X, y)
+            X_full = self.scaler.fit_transform(X)
+            self._fit_model_pair(X_full, y)
             return
 
-        self.xgb_model.fit(X_train, y_train, verbose=False)
-        self.rf_model.fit(X_train, y_train)
+        validation_scaler = StandardScaler()
+        X_train = validation_scaler.fit_transform(X_train_raw)
+        X_val = validation_scaler.transform(X_val_raw)
+        self._fit_model_pair(X_train, y_train)
 
         model_losses = {}
+        model_brier = {}
+        val_predictions = {}
         for name, model in (("xgb", self.xgb_model), ("rf", self.rf_model)):
             try:
                 preds = np.clip(model.predict_proba(X_val)[:, 1], 0.02, 0.98)
                 loss = float(log_loss(y_val, preds, labels=[0, 1]))
+                brier = float(brier_score_loss(y_val, preds))
                 model_losses[name] = loss
+                model_brier[name] = brier
+                val_predictions[name] = preds
                 self.validation_metrics[f"{name}_log_loss"] = round(loss, 6)
+                self.validation_metrics[f"{name}_brier"] = round(brier, 6)
             except Exception as exc:
                 logger.warning(f"[Train] Validation scoring failed for {name}: {exc}")
 
@@ -339,7 +387,6 @@ class EnsembleModel:
             inv = {name: 1.0 / max(loss, 1e-6) for name, loss in model_losses.items()}
             total = sum(inv.values())
             raw_weights = {name: score / total for name, score in inv.items()}
-            # Keep both learners represented to avoid overfitting one validation slice.
             self.model_weights = {
                 name: round(float(np.clip(weight, 0.2, 0.8)), 4)
                 for name, weight in raw_weights.items()
@@ -349,11 +396,19 @@ class EnsembleModel:
                 name: round(weight / weight_total, 4)
                 for name, weight in self.model_weights.items()
             }
+            weights = np.array([self.model_weights["xgb"], self.model_weights["rf"]], dtype=np.float32)
+            ensemble_val = np.average(
+                np.vstack([val_predictions["xgb"], val_predictions["rf"]]), axis=0, weights=weights
+            )
+            self.validation_metrics["ensemble_log_loss"] = round(
+                float(log_loss(y_val, np.clip(ensemble_val, 0.02, 0.98), labels=[0, 1])), 6
+            )
+            self.validation_metrics["ensemble_brier"] = round(float(brier_score_loss(y_val, ensemble_val)), 6)
             self.validation_metrics["validation_samples"] = int(len(y_val))
 
-        # Refit on the full data for production inference once weights are set.
-        self.xgb_model.fit(X, y, verbose=False)
-        self.rf_model.fit(X, y)
+        # Refit on the full data with a scaler fitted only for production inference.
+        X_full = self.scaler.fit_transform(X)
+        self._fit_model_pair(X_full, y)
 
 
     def _build_feature_matrix(self, df, min_coverage: float = 0.5):
