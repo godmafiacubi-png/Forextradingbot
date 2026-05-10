@@ -1,4 +1,3 @@
-import numpy as np
 import logging
 import MetaTrader5 as mt5
 
@@ -36,8 +35,8 @@ class PositionSizer:
                     }
                     self._symbol_cache[symbol] = data
                     return data
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"Unable to load MT5 symbol info for {symbol}: {exc}")
         return None
 
     def calculate_position_size(self, account_balance, atr_value, symbol_point,
