@@ -12,8 +12,8 @@ load_dotenv()
 # ============================================================
 # BOT MODE
 # ============================================================
-BOT_MODE = 'AGGRESSIVE'
-TRADING_MODE = 'AGGRESSIVE'
+BOT_MODE = os.getenv('BOT_MODE', 'AGGRESSIVE').upper()
+TRADING_MODE = BOT_MODE
 
 # ============================================================
 # MT5 CONNECTION
@@ -26,7 +26,7 @@ MT5_PATH = os.getenv('MT5_PATH', '')
 # ============================================================
 # DASHBOARD
 # ============================================================
-DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5004'))
+DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5001'))
 
 # ============================================================
 # TELEGRAM
