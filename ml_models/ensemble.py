@@ -14,6 +14,7 @@ import pandas as pd
 from typing import Optional, Dict, List
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import log_loss
 import xgboost as xgb
 
 from .regime_aware_ensemble import RegimeAwareEnsemble
@@ -70,6 +71,8 @@ class EnsembleModel:
         self.is_trained = False
         self.feature_cols = None
         self.n_features = None
+        self.model_weights = {"xgb": 0.5, "rf": 0.5}
+        self.validation_metrics = {}
 
         # ---- Regime-aware ensemble ----
         self.use_regime_models = use_regime_models
@@ -268,10 +271,12 @@ class EnsembleModel:
 
         # ---- Base models ----
         try:
-            self.xgb_model.fit(X, y, verbose=False)
-            self.rf_model.fit(X, y)
+            self._fit_base_models_with_validation(X, y)
             self.is_trained = True
-            logger.info(f"Base models trained: {len(y)} samples")
+            logger.info(
+                f"Base models trained: {len(y)} samples | "
+                f"weights={self.model_weights} | metrics={self.validation_metrics}"
+            )
         except Exception as e:
             logger.error(f"Base model training error: {e}", exc_info=True)
             return False
@@ -285,6 +290,67 @@ class EnsembleModel:
                 logger.warning(f"Regime ensemble training error (non-fatal): {e}")
 
         return True
+
+
+    def _fit_base_models_with_validation(self, X: np.ndarray, y: np.ndarray):
+        """Fit base learners and derive validation-aware blend weights.
+
+        The live ensemble used to average XGBoost and RandomForest equally. That
+        can over-trust a weak learner after market-regime drift. We keep the
+        training API unchanged, reserve a chronological validation slice when
+        enough data is available, convert validation log-loss into robust model
+        weights, then refit both learners on all available samples.
+        """
+        self.model_weights = {"xgb": 0.5, "rf": 0.5}
+        self.validation_metrics = {}
+
+        if len(y) < 80 or len(np.unique(y)) < 2:
+            self.xgb_model.fit(X, y, verbose=False)
+            self.rf_model.fit(X, y)
+            return
+
+        split_idx = max(int(len(y) * 0.8), len(y) - 250)
+        split_idx = min(max(split_idx, 40), len(y) - 20)
+        X_train, X_val = X[:split_idx], X[split_idx:]
+        y_train, y_val = y[:split_idx], y[split_idx:]
+
+        if len(np.unique(y_train)) < 2 or len(np.unique(y_val)) < 2:
+            self.xgb_model.fit(X, y, verbose=False)
+            self.rf_model.fit(X, y)
+            return
+
+        self.xgb_model.fit(X_train, y_train, verbose=False)
+        self.rf_model.fit(X_train, y_train)
+
+        model_losses = {}
+        for name, model in (("xgb", self.xgb_model), ("rf", self.rf_model)):
+            try:
+                preds = np.clip(model.predict_proba(X_val)[:, 1], 0.02, 0.98)
+                loss = float(log_loss(y_val, preds, labels=[0, 1]))
+                model_losses[name] = loss
+                self.validation_metrics[f"{name}_log_loss"] = round(loss, 6)
+            except Exception as exc:
+                logger.warning(f"[Train] Validation scoring failed for {name}: {exc}")
+
+        if len(model_losses) == 2:
+            inv = {name: 1.0 / max(loss, 1e-6) for name, loss in model_losses.items()}
+            total = sum(inv.values())
+            raw_weights = {name: score / total for name, score in inv.items()}
+            # Keep both learners represented to avoid overfitting one validation slice.
+            self.model_weights = {
+                name: round(float(np.clip(weight, 0.2, 0.8)), 4)
+                for name, weight in raw_weights.items()
+            }
+            weight_total = sum(self.model_weights.values())
+            self.model_weights = {
+                name: round(weight / weight_total, 4)
+                for name, weight in self.model_weights.items()
+            }
+            self.validation_metrics["validation_samples"] = int(len(y_val))
+
+        # Refit on the full data for production inference once weights are set.
+        self.xgb_model.fit(X, y, verbose=False)
+        self.rf_model.fit(X, y)
 
     # ----------------------------------------------------------
     # Prediction
@@ -339,7 +405,13 @@ class EnsembleModel:
             except Exception:
                 base_preds.append(np.full(len(X), 0.5))
 
-            base_ensemble = np.mean(base_preds, axis=0)
+            weights = np.array([
+                self.model_weights.get("xgb", 0.5),
+                self.model_weights.get("rf", 0.5),
+            ], dtype=np.float32)
+            weights = weights / max(float(weights.sum()), 1e-9)
+            base_ensemble = np.average(np.vstack(base_preds), axis=0, weights=weights)
+            base_ensemble = np.clip(base_ensemble, 0.02, 0.98)
 
             # ---- Regime-aware predictions (blend in) ----
             if (self.use_regime_models and
@@ -351,8 +423,11 @@ class EnsembleModel:
                     regime=self._current_regime,
                     regime_confidence=self._current_regime_confidence,
                 )
-                # Blend: 50% base, 50% regime (adjustable)
-                regime_weight = np.clip(self._current_regime_confidence * 0.5, 0.1, 0.5)
+                # Blend with regime model only when live features have reasonable
+                # coverage; low coverage should lean on the robust global model.
+                regime_weight = np.clip(
+                    self._current_regime_confidence * 0.5 * coverage, 0.05, 0.5
+                )
                 final = (1 - regime_weight) * base_ensemble + regime_weight * regime_pred
             else:
                 final = base_ensemble
@@ -399,7 +474,9 @@ class EnsembleModel:
                 "name": os.path.basename(path),
                 "n_features": self.n_features,
                 "is_trained": self.is_trained,
-                "version": "2.0",
+                "version": "2.1",
+                "model_weights": self.model_weights,
+                "validation_metrics": self.validation_metrics,
             }
             with open(os.path.join(path, "metadata.pkl"), "wb") as f:
                 pickle.dump(metadata, f)
@@ -433,6 +510,8 @@ class EnsembleModel:
                 meta = pickle.load(open(meta_path, "rb"))
                 self.n_features = meta.get("n_features")
                 self.is_trained = meta.get("is_trained", True)
+                self.model_weights = meta.get("model_weights", self.model_weights)
+                self.validation_metrics = meta.get("validation_metrics", self.validation_metrics)
 
             # Load regime ensemble
             regime_path = os.path.join(path, "regime")
@@ -456,6 +535,8 @@ class EnsembleModel:
             "n_features": self.n_features,
             "current_symbol": self._current_symbol,
             "current_regime": self._current_regime,
+            "model_weights": self.model_weights,
+            "validation_metrics": self.validation_metrics,
         }
         if self.regime_ensemble:
             stats["regime_ensemble"] = self.regime_ensemble.get_stats()
