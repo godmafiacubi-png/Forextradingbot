@@ -10,12 +10,15 @@ services are needed.
 
 from __future__ import annotations
 
+import json
 import logging
 import threading
+import webbrowser
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from html import escape
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,7 @@ dashboard_state: dict[str, Any] = {
 
 _server: ThreadingHTTPServer | None = None
 _server_thread: threading.Thread | None = None
+_opened_browser = False
 
 
 def update_dashboard(key: str, value: Any) -> None:
@@ -65,18 +69,39 @@ def add_log(msg: str) -> None:
         dashboard_state['log_messages'] = dashboard_state['log_messages'][-200:]
 
 
+class _ReusableThreadingHTTPServer(ThreadingHTTPServer):
+    """Threaded HTTP server that can restart quickly on the same dashboard port."""
+
+    allow_reuse_address = True
+    daemon_threads = True
+
+
 class _DashboardHandler(BaseHTTPRequestHandler):
     """Tiny stdlib HTTP handler for the default dashboard."""
 
     def do_GET(self) -> None:  # noqa: N802 - BaseHTTPRequestHandler API
-        if self.path not in ('/', '/index.html'):
-            self.send_error(404)
+        parsed = urlparse(self.path)
+        if parsed.path in ('/', '/index.html'):
+            self._send_text(_render_html(), 'text/html; charset=utf-8')
             return
+        if parsed.path == '/api/state':
+            self._send_text(json.dumps(dashboard_state, default=str), 'application/json; charset=utf-8')
+            return
+        if parsed.path == '/health':
+            self._send_text(json.dumps({'ok': True, 'status': dashboard_state.get('bot_status')}), 'application/json; charset=utf-8')
+            return
+        if parsed.path == '/favicon.ico':
+            self.send_response(204)
+            self.end_headers()
+            return
+        self.send_error(404)
 
-        body = _render_html().encode('utf-8')
+    def _send_text(self, content: str, content_type: str) -> None:
+        body = content.encode('utf-8')
         self.send_response(200)
-        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Type', content_type)
         self.send_header('Content-Length', str(len(body)))
+        self.send_header('Cache-Control', 'no-store')
         self.end_headers()
         self.wfile.write(body)
 
@@ -84,20 +109,93 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         logger.debug("Default dashboard: " + format, *args)
 
 
+def _format_number(value: Any, decimals: int = 2) -> str:
+    try:
+        return f"{float(value):,.{decimals}f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def _json_summary(value: Any) -> str:
+    if value in (None, '', [], {}):
+        return '—'
+    try:
+        return json.dumps(value, ensure_ascii=False, default=str, indent=2)
+    except TypeError:
+        return str(value)
+
+
+def _badge_class(value: Any) -> str:
+    text = str(value).upper()
+    if any(word in text for word in ('RUNNING', 'BUY', 'PROFIT', 'PASS', 'OK')):
+        return 'positive'
+    if any(word in text for word in ('STOP', 'SELL', 'LOSS', 'BLOCK', 'ERROR', 'FAIL')):
+        return 'negative'
+    return 'neutral'
+
+
+def _render_kv_table(data: Any, empty: str = 'No data yet.') -> str:
+    if not isinstance(data, dict) or not data:
+        return f'<tr><td colspan="2" class="muted">{escape(empty)}</td></tr>'
+    rows = []
+    for key, value in data.items():
+        rows.append(
+            '<tr>'
+            f'<th>{escape(str(key).replace("_", " ").title())}</th>'
+            f'<td><pre>{escape(_json_summary(value))}</pre></td>'
+            '</tr>'
+        )
+    return ''.join(rows)
+
+
+def _render_positions() -> str:
+    positions = dashboard_state.get('open_positions') or []
+    if not positions:
+        return '<tr><td colspan="8" class="muted">No open positions.</td></tr>'
+    rows = []
+    for pos in positions:
+        side = pos.get('side', '') if isinstance(pos, dict) else ''
+        pnl = pos.get('pnl', 0) if isinstance(pos, dict) else 0
+        try:
+            pnl_value = float(pnl or 0)
+        except (TypeError, ValueError):
+            pnl_value = 0.0
+        rows.append(
+            '<tr>'
+            f'<td>{escape(str(pos.get("ticket", "")))}</td>'
+            f'<td>{escape(str(pos.get("symbol", "")))}</td>'
+            f'<td><span class="badge {_badge_class(side)}">{escape(str(side))}</span></td>'
+            f'<td>{escape(_format_number(pos.get("volume", 0), 2))}</td>'
+            f'<td>{escape(_format_number(pos.get("entry", 0), 5))}</td>'
+            f'<td>{escape(_format_number(pos.get("current_price", 0), 5))}</td>'
+            f'<td>{escape(_format_number(pos.get("sl", 0), 5))}</td>'
+            f'<td class="{_badge_class("PROFIT" if pnl_value >= 0 else "LOSS")}">{escape(_format_number(pnl, 2))}</td>'
+            '</tr>'
+        )
+    return ''.join(rows)
+
+
 def _render_html() -> str:
     account = dashboard_state.get('account') or {}
     logs = dashboard_state.get('log_messages') or []
-    recent_logs = logs[-25:]
+    recent_logs = logs[-30:]
     log_rows = ''.join(
         f"<li><span>{escape(str(item.get('time', '')))}</span> {escape(str(item.get('msg', '')))}</li>"
         for item in recent_logs
-    ) or '<li>No log messages yet.</li>'
+    ) or '<li class="muted">No log messages yet.</li>'
 
-    symbols = dashboard_state.get('symbols') or {}
-    symbol_rows = ''.join(
-        f"<tr><td>{escape(str(symbol))}</td><td>{escape(str(data))}</td></tr>"
-        for symbol, data in symbols.items()
-    ) or '<tr><td colspan="2">No symbol data yet.</td></tr>'
+    status = dashboard_state.get('bot_status', 'STOPPED')
+    profit = account.get('profit', 0)
+    daily_pnl = dashboard_state.get('daily_pnl', 0)
+    try:
+        profit_value = float(profit or 0)
+    except (TypeError, ValueError):
+        profit_value = 0.0
+    try:
+        daily_pnl_value = float(daily_pnl or 0)
+    except (TypeError, ValueError):
+        daily_pnl_value = 0.0
+    open_positions = dashboard_state.get('open_positions') or []
 
     return f"""<!doctype html>
 <html lang="en">
@@ -107,60 +205,127 @@ def _render_html() -> str:
   <meta http-equiv="refresh" content="5">
   <title>Trading Bot Dashboard</title>
   <style>
-    body {{ font-family: Arial, sans-serif; margin: 2rem; background: #101820; color: #eef2f7; }}
-    .card {{ background: #172331; border: 1px solid #2f4054; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }}
-    .grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: .75rem; }}
-    .metric {{ background: #0f1722; border-radius: 8px; padding: .75rem; }}
-    .label {{ color: #93a4b8; font-size: .8rem; text-transform: uppercase; }}
-    .value {{ font-size: 1.3rem; font-weight: 700; margin-top: .25rem; }}
-    table {{ width: 100%; border-collapse: collapse; }}
-    td, th {{ border-bottom: 1px solid #2f4054; padding: .5rem; text-align: left; vertical-align: top; }}
-    li {{ margin: .35rem 0; }}
-    li span {{ color: #93a4b8; font-family: monospace; }}
+    :root {{ color-scheme: dark; --bg:#07111f; --panel:#0f1b2d; --panel2:#13243a; --line:#263a56; --text:#eef5ff; --muted:#93a8c2; --green:#2ee59d; --red:#ff6b7a; --amber:#ffd166; --blue:#60a5fa; }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin:0; min-height:100vh; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Arial, sans-serif; background: radial-gradient(circle at top left, #12355f 0, transparent 32rem), var(--bg); color: var(--text); }}
+    .wrap {{ width:min(1400px, calc(100% - 32px)); margin:0 auto; padding:28px 0 48px; }}
+    .hero {{ display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:22px; }}
+    h1 {{ margin:0; font-size:clamp(1.8rem, 4vw, 3.2rem); letter-spacing:-.04em; }}
+    h2 {{ margin:0 0 14px; font-size:1rem; letter-spacing:.08em; text-transform:uppercase; color:#cfe2ff; }}
+    .subtitle {{ color:var(--muted); margin-top:8px; }}
+    .pill, .badge {{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 12px; font-weight:700; font-size:.85rem; border:1px solid var(--line); background:rgba(255,255,255,.04); }}
+    .positive {{ color:var(--green); }} .negative {{ color:var(--red); }} .neutral {{ color:var(--amber); }} .muted {{ color:var(--muted); }}
+    .grid {{ display:grid; grid-template-columns: repeat(12, 1fr); gap:16px; }}
+    .card {{ grid-column: span 12; background:linear-gradient(180deg, rgba(19,36,58,.92), rgba(12,24,40,.92)); border:1px solid var(--line); border-radius:22px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.25); }}
+    .span-3 {{ grid-column: span 3; }} .span-4 {{ grid-column: span 4; }} .span-6 {{ grid-column: span 6; }} .span-8 {{ grid-column: span 8; }}
+    .metric {{ min-height:128px; display:flex; flex-direction:column; justify-content:space-between; }}
+    .label {{ color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.12em; }}
+    .value {{ font-size:clamp(1.5rem, 3vw, 2.5rem); font-weight:800; letter-spacing:-.04em; margin-top:8px; }}
+    .hint {{ color:var(--muted); font-size:.86rem; margin-top:10px; }}
+    table {{ width:100%; border-collapse:collapse; overflow:hidden; }}
+    th, td {{ border-bottom:1px solid rgba(147,168,194,.18); padding:12px 10px; text-align:left; vertical-align:top; }}
+    th {{ color:#bdd2ee; font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; }}
+    pre {{ white-space:pre-wrap; word-break:break-word; margin:0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#dcecff; }}
+    ul {{ padding-left:1.1rem; margin:0; max-height:420px; overflow:auto; }}
+    li {{ margin:.48rem 0; }} li span {{ color:var(--blue); font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
+    .toolbar {{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }}
+    a {{ color:#93c5fd; text-decoration:none; }} a:hover {{ text-decoration:underline; }}
+    @media (max-width: 980px) {{ .span-3, .span-4, .span-6, .span-8 {{ grid-column: span 12; }} .hero {{ flex-direction:column; }} .toolbar {{ justify-content:flex-start; }} }}
   </style>
 </head>
 <body>
-  <h1>Trading Bot Dashboard <small>({escape(str(dashboard_state.get('mode', 'DEFAULT')))} mode)</small></h1>
-  <p>Status: <strong>{escape(str(dashboard_state.get('bot_status', 'STOPPED')))}</strong> |
-     Iteration: {escape(str(dashboard_state.get('iteration', 0)))} |
-     Last update: {escape(str(dashboard_state.get('last_update', '')))}</p>
-  <section class="card">
-    <h2>Account</h2>
-    <div class="grid">
-      <div class="metric"><div class="label">Balance</div><div class="value">{escape(str(account.get('balance', 0)))}</div></div>
-      <div class="metric"><div class="label">Equity</div><div class="value">{escape(str(account.get('equity', 0)))}</div></div>
-      <div class="metric"><div class="label">Profit</div><div class="value">{escape(str(account.get('profit', 0)))}</div></div>
-      <div class="metric"><div class="label">Daily PnL</div><div class="value">{escape(str(dashboard_state.get('daily_pnl', 0)))}</div></div>
-    </div>
-  </section>
-  <section class="card">
-    <h2>Symbols</h2>
-    <table><tbody>{symbol_rows}</tbody></table>
-  </section>
-  <section class="card">
-    <h2>Recent Logs</h2>
-    <ul>{log_rows}</ul>
-  </section>
+  <main class="wrap">
+    <header class="hero">
+      <div>
+        <h1>Trading Bot Dashboard</h1>
+        <div class="subtitle">Mode: <strong>{escape(str(dashboard_state.get('mode', 'DEFAULT')))}</strong> · Iteration {escape(str(dashboard_state.get('iteration', 0)))} · Last update {escape(str(dashboard_state.get('last_update') or 'waiting for data'))}</div>
+      </div>
+      <div class="toolbar">
+        <span class="pill {_badge_class(status)}">● {escape(str(status))}</span>
+        <a class="pill" href="/api/state">API State</a>
+        <a class="pill" href="/health">Health</a>
+      </div>
+    </header>
+
+    <section class="grid">
+      <article class="card metric span-3"><div><div class="label">Balance</div><div class="value">{escape(_format_number(account.get('balance', 0)))}</div></div><div class="hint">Account cash balance</div></article>
+      <article class="card metric span-3"><div><div class="label">Equity</div><div class="value">{escape(_format_number(account.get('equity', 0)))}</div></div><div class="hint">Live equity including floating PnL</div></article>
+      <article class="card metric span-3"><div><div class="label">Profit</div><div class="value {_badge_class('PROFIT' if profit_value >= 0 else 'LOSS')}">{escape(_format_number(profit))}</div></div><div class="hint">Current account profit</div></article>
+      <article class="card metric span-3"><div><div class="label">Daily PnL</div><div class="value {_badge_class('PROFIT' if daily_pnl_value >= 0 else 'LOSS')}">{escape(_format_number(daily_pnl))}</div></div><div class="hint">Today’s realized bot PnL</div></article>
+
+      <article class="card span-8">
+        <h2>Open Positions ({len(open_positions)})</h2>
+        <table><thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Current</th><th>SL</th><th>PnL</th></tr></thead><tbody>{_render_positions()}</tbody></table>
+      </article>
+      <article class="card span-4">
+        <h2>Risk Guard</h2>
+        <table><tbody>{_render_kv_table(dashboard_state.get('risk_guard'), 'Risk status has not been reported yet.')}</tbody></table>
+      </article>
+
+      <article class="card span-6">
+        <h2>Signals</h2>
+        <table><tbody>{_render_kv_table(dashboard_state.get('signals'), 'No signal data yet.')}</tbody></table>
+      </article>
+      <article class="card span-6">
+        <h2>Symbols</h2>
+        <table><tbody>{_render_kv_table(dashboard_state.get('symbols'), 'No symbol data yet.')}</tbody></table>
+      </article>
+
+      <article class="card span-4">
+        <h2>Performance</h2>
+        <table><tbody>{_render_kv_table(dashboard_state.get('tracker_stats'), 'No closed-trade statistics yet.')}</tbody></table>
+      </article>
+      <article class="card span-4">
+        <h2>Quality / M30</h2>
+        <table><tbody>{_render_kv_table({'quality': dashboard_state.get('quality_stats'), 'm30': dashboard_state.get('m30_stats')})}</tbody></table>
+      </article>
+      <article class="card span-4">
+        <h2>AI / Regime</h2>
+        <table><tbody>{_render_kv_table({'rl': dashboard_state.get('rl_stats'), 'regime': dashboard_state.get('regime_stats')})}</tbody></table>
+      </article>
+
+      <article class="card span-6">
+        <h2>Adaptive Controls</h2>
+        <table><tbody>{_render_kv_table({'adaptive': dashboard_state.get('adaptive'), 'streak': dashboard_state.get('streak'), 'auto_adjust': dashboard_state.get('auto_adjust')})}</tbody></table>
+      </article>
+      <article class="card span-6">
+        <h2>Recent Logs</h2>
+        <ul>{log_rows}</ul>
+      </article>
+    </section>
+  </main>
 </body>
 </html>"""
 
 
-def start_dashboard(port: int | None = None, host: str = '0.0.0.0') -> ThreadingHTTPServer:
+def start_dashboard(port: int | None = None, host: str = '0.0.0.0', open_browser: bool = True) -> ThreadingHTTPServer:
     """
     Start the lightweight default dashboard in a daemon thread.
 
     The function is idempotent for a running process and returns the active
     server object, which is useful for smoke tests and operational diagnostics.
+    By default it also opens the local dashboard URL once, matching the
+    aggressive dashboard behavior and making manual launches easier.
     """
-    global _server, _server_thread
+    global _server, _server_thread, _opened_browser
 
     if _server is not None:
         return _server
 
     selected_port = int(port or dashboard_state.get('dashboard_port', 5001))
     dashboard_state['dashboard_port'] = selected_port
-    _server = ThreadingHTTPServer((host, selected_port), _DashboardHandler)
+    _server = _ReusableThreadingHTTPServer((host, selected_port), _DashboardHandler)
+    actual_port = int(_server.server_address[1])
+    dashboard_state['dashboard_port'] = actual_port
     _server_thread = threading.Thread(target=_server.serve_forever, name='default-dashboard', daemon=True)
     _server_thread.start()
-    logger.info("Default dashboard started on http://%s:%s", host, selected_port)
+
+    url = f"http://localhost:{actual_port}"
+    logger.info("Default dashboard started on %s (bind host: %s)", url, host)
+    if open_browser and not _opened_browser:
+        try:
+            webbrowser.open(url)
+            _opened_browser = True
+        except Exception as exc:  # browser launch is best-effort; server is already running
+            logger.warning("Default dashboard is running; open manually: %s (%s)", url, exc)
     return _server
