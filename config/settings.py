@@ -58,15 +58,7 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID', '')
 # ============================================================
 # SYMBOLS & TIMEFRAMES
 # ============================================================
-# ============================================================
-# ACTIVE SYMBOLS — Prop Firm Mode v8.0
-# Disabled by backtest evidence:
-#   GBPUSDm:  R:R realized 0.96x (GBPUSDm_COMBO_24h_Aggress_report) — below 1.0x
-#   USDJPYm:  R:R realized 0.56x (USDJPYm_COMBO_Full_Stack_report)  — far below target
-#   BTCUSDm:  Insufficient sample, high spread cost
-# Active:
-#   EURUSDm:  Core forex pair, low spread, high liquidity
-#   XAUUSDm:  Strong trends, good R:R potential
+
 # ============================================================
 SYMBOLS = {
     'FOREX': ['EURUSDm', 'GBPUSDm', 'USDJPYm'],
@@ -96,9 +88,6 @@ CORRELATION_GROUPS = {
     'JPY_VS_XAUUSD': ['USDJPYm', 'XAUUSDm'],    # JPY must not match GBP direction
 }
 
-# XAUUSDm: no group → trades freely
-# EURUSDm + GBPUSDm: no group together → can go same direction
-# USDJPYm + EURUSDm/GBPUSDm: in JPY_VS_* groups, max 1 same direction → blocked
 MAX_SAME_DIRECTION_CORRELATED = 1
 
 SYMBOL_BEST_SESSIONS = {
@@ -135,7 +124,7 @@ UPDATE_INTERVAL = 60
 # ============================================================
 ML_THRESHOLD_BUY = 0.53
 ML_THRESHOLD_SELL = 0.47
-MIN_CONFIDENCE = 0.55        # was 0.38 — Prop Firm requires high confidence
+MIN_CONFIDENCE = 0.55        
 SIGNAL_COOLDOWN = 2
 
 # ============================================================
@@ -151,8 +140,8 @@ MAX_LOT_SIZE = _env_float('MAX_LOT_SIZE', 2.0)
 # ============================================================
 POSITION_SIZING_METHOD = 'ATR'
 ACCOUNT_RISK_PERCENT = 0.7
-MAX_DAILY_RISK_PERCENT = 5.0 # was 5.0 — tighter daily risk
-MAX_OPEN_TRADES = 5          # was 3 — allow more symbols
+MAX_DAILY_RISK_PERCENT = 5.0 
+MAX_OPEN_TRADES = 5          
 MAX_TRADES_PER_SYMBOL = 1
 
 # ============================================================
@@ -173,13 +162,13 @@ PULLBACK_RSI_BUY_MAX = 60
 PULLBACK_RSI_SELL_MIN = 40
 
 REQUIRE_PULLBACK = True
-REQUIRE_HTF_ALIGNMENT = False
+REQUIRE_HTF_ALIGNMENT = True
 REQUIRE_ICT_CONFLUENCE = True
 
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 35    # was 65 — lowered for testing
+MIN_QUALITY_SCORE = 45    
 
 # ============================================================
 # QUIET MARKET KILL SWITCH
