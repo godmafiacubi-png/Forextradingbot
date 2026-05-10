@@ -1,6 +1,6 @@
 """
-AGGRESSIVE MODE — Target 15-20%/month | DD < 10%
-Risk ปานกลาง-สูง | Compounding ON | Confidence Scaling ON
+NORMAL MODE — balanced default trading profile.
+Risk ปานกลาง | Compounding ON | Confidence Scaling ON
 Optimised: BE เร็ว + TP กว้าง + filter เข้มขึ้น
 """
 
@@ -33,7 +33,8 @@ def _env_float(name, default):
 # ============================================================
 # BOT MODE
 # ============================================================
-BOT_MODE = os.getenv('BOT_MODE', 'AGGRESSIVE').upper()
+BOT_VERSION = os.getenv('BOT_VERSION', 'V8.0').upper()
+BOT_MODE = os.getenv('BOT_MODE', 'NORMAL').upper()
 TRADING_MODE = BOT_MODE
 
 # ============================================================
