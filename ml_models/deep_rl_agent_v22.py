@@ -40,6 +40,64 @@ except ImportError:
     _LEGACY_IMPORTS_OK = False
 
 
+
+
+# ============================================================
+# Symbol-aware prioritized replay for cross-symbol head training
+# ============================================================
+if _LEGACY_IMPORTS_OK:
+    class SymbolAwarePrioritizedReplayBuffer(PrioritizedReplayBuffer):
+        """Prioritized replay buffer that keeps the originating symbol.
+
+        v2.2 used symbol-specific inference heads but trained only the default
+        head because replay samples discarded the symbol. Keeping the symbol lets
+        each sampled transition update the same head that was used at inference.
+        """
+
+        def push(self, state, action, reward, next_state, done, symbol="__default__"):
+            experience = (state, action, reward, next_state, done, symbol or "__default__")
+            priority = self.max_priority ** self.alpha
+            self.tree.add(priority, experience)
+
+        def sample(self, batch_size):
+            batch = []
+            indices = []
+            priorities = []
+            segment = self.tree.total() / batch_size
+
+            for i in range(batch_size):
+                a = segment * i
+                b = segment * (i + 1)
+                s = random.uniform(a, b)
+                idx, priority, data = self.tree.get(s)
+                if data is None or (isinstance(data, (int, float)) and data == 0):
+                    continue
+                batch.append(data)
+                indices.append(idx)
+                priorities.append(priority)
+
+            if len(batch) == 0:
+                return None, None, None
+
+            self.frame += 1
+            beta = min(
+                1.0,
+                self.beta_start + self.frame * (1.0 - self.beta_start) / self.beta_frames,
+            )
+            probs = np.array(priorities) / (self.tree.total() + 1e-10)
+            weights = (self.tree.n_entries * probs + 1e-10) ** (-beta)
+            weights /= weights.max()
+
+            states = np.array([b[0] for b in batch])
+            actions = np.array([b[1] for b in batch])
+            rewards = np.array([b[2] for b in batch])
+            next_states = np.array([b[3] for b in batch])
+            dones = np.array([b[4] for b in batch])
+            symbols = np.array([b[5] if len(b) > 5 else "__default__" for b in batch])
+
+            return (states, actions, rewards, next_states, dones, symbols), indices, weights
+
+
 # ============================================================
 # Cross-Symbol Shared Encoder
 # ============================================================
@@ -218,7 +276,7 @@ class DeepRLTradingAgent:
             self.scheduler = None
 
         if _LEGACY_IMPORTS_OK:
-            self.replay_buffer = PrioritizedReplayBuffer(
+            self.replay_buffer = SymbolAwarePrioritizedReplayBuffer(
                 capacity=buffer_size, alpha=0.6, beta_start=0.4, beta_frames=100000)
             self.n_step_buffers = defaultdict(lambda: NStepBuffer(n_step=n_step, gamma=gamma))
             self.regime_detector = MarketRegimeDetector()
@@ -245,6 +303,7 @@ class DeepRLTradingAgent:
         self._global_epsilon = 1.0
         self._epsilon_min = 0.05
         self._epsilon_decay = 0.998
+        self._min_symbol_head_trades = 10
 
         # Metrics
         self.losses = deque(maxlen=100)
@@ -259,6 +318,22 @@ class DeepRLTradingAgent:
             f"[DeepRL v2.2] Cross-symbol={use_cross_symbol} | "
             f"State={self.STATE_SIZE} | Device={self.device}"
         )
+
+    def _symbol_key(self, symbol: str) -> str:
+        """Map broker symbols like EURUSDm/XAUUSD.r to known model heads."""
+        raw = (symbol or "").upper()
+        for known in self.KNOWN_SYMBOLS:
+            if raw.startswith(known):
+                return known
+        return "__default__"
+
+    def _inference_symbol_key(self, symbol: str) -> str:
+        """Use symbol heads only after enough symbol-specific outcomes exist."""
+        key = self._symbol_key(symbol)
+        if key == "__default__":
+            return key
+        trades = self.symbol_performance.get(key, {}).get("trades", 0)
+        return key if trades >= self._min_symbol_head_trades else "__default__"
 
     # ----------------------------------------------------------
     # State building (identical to v2.1)
@@ -336,7 +411,8 @@ class DeepRLTradingAgent:
             return random.randint(0, self.ACTION_SIZE - 1)
 
         self.total_frames += 1
-        eps = self._symbol_epsilon.get(symbol, self._global_epsilon)
+        symbol_key = self._inference_symbol_key(symbol)
+        eps = self._symbol_epsilon.get(symbol_key, self._global_epsilon)
 
         if random.random() < eps:
             return random.randint(0, self.ACTION_SIZE - 1)
@@ -345,7 +421,7 @@ class DeepRLTradingAgent:
             state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             self.policy_net.eval()
             if self.use_cross_symbol:
-                q_values = self.policy_net(state_t, symbol=symbol)
+                q_values = self.policy_net(state_t, symbol=symbol_key)
             else:
                 q_values = self.policy_net(state_t)
             self.policy_net.train()
@@ -460,8 +536,8 @@ class DeepRLTradingAgent:
             n_buf.push(state, action, reward, next_state, False)
             n_step_transition = n_buf.get()
             if n_step_transition:
-                self.replay_buffer.push(*n_step_transition)
-            self.replay_buffer.push(state, action, reward, next_state, False)
+                self.replay_buffer.push(*n_step_transition, symbol=self._symbol_key(symbol))
+            self.replay_buffer.push(state, action, reward, next_state, False, self._symbol_key(symbol))
 
         if self.replay_buffer is not None and len(self.replay_buffer) >= self.batch_size:
             loss = self._train_step()
@@ -469,7 +545,8 @@ class DeepRLTradingAgent:
                 self.losses.append(loss)
 
         # Update per-symbol epsilon
-        sp = self.symbol_performance[symbol]
+        symbol_key = self._symbol_key(symbol)
+        sp = self.symbol_performance[symbol_key]
         sp["trades"] += 1
         if pnl > 0:
             sp["wins"] += 1
@@ -485,9 +562,9 @@ class DeepRLTradingAgent:
             decay = 0.996 if sym_wr >= 0.55 else self._epsilon_decay
         else:
             decay = self._epsilon_decay
-        self._symbol_epsilon[symbol] = max(
+        self._symbol_epsilon[symbol_key] = max(
             self._epsilon_min,
-            self._symbol_epsilon.get(symbol, 1.0) * decay,
+            self._symbol_epsilon.get(symbol_key, 1.0) * decay,
         )
         self._global_epsilon = max(self._epsilon_min, self._global_epsilon * self._epsilon_decay)
 
@@ -503,7 +580,7 @@ class DeepRLTradingAgent:
         else:
             reward = -0.1 if had_signal else 0.05
         if self.replay_buffer is not None:
-            self.replay_buffer.push(state, 0, reward, state.copy(), False)
+            self.replay_buffer.push(state, 0, reward, state.copy(), False, self._symbol_key(symbol))
 
         # Train ทุก 10 hold rewards เมื่อ buffer พร้อม
         if not hasattr(self, '_hold_steps'):
@@ -530,7 +607,12 @@ class DeepRLTradingAgent:
         if result[0] is None:
             return None
 
-        (states, actions, rewards, next_states, dones), indices, weights = result
+        sample_payload, indices, weights = result
+        if len(sample_payload) == 6:
+            states, actions, rewards, next_states, dones, symbols = sample_payload
+        else:
+            states, actions, rewards, next_states, dones = sample_payload
+            symbols = np.array(["__default__"] * len(states))
 
         states_t = torch.FloatTensor(states).to(self.device)
         actions_t = torch.LongTensor(actions).unsqueeze(1).to(self.device)
@@ -539,12 +621,33 @@ class DeepRLTradingAgent:
         dones_t = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
         weights_t = torch.FloatTensor(weights).unsqueeze(1).to(self.device)
 
-        # Use default symbol for batch training (cross-symbol learning)
         if self.use_cross_symbol:
-            current_q = self.policy_net(states_t, symbol="__default__").gather(1, actions_t)
-            with torch.no_grad():
-                next_actions = self.policy_net(next_states_t, symbol="__default__").argmax(1, keepdim=True)
-                next_q = self.target_net(next_states_t, symbol="__default__").gather(1, next_actions)
+            # Replay batches can contain multiple symbols. Evaluate each grouped
+            # slice with its corresponding head, then restore the original order
+            # while keeping gradients connected to the selected head outputs.
+            symbol_keys = np.array([self._symbol_key(sym) for sym in symbols])
+            current_q_parts = []
+            next_q_parts = []
+            order_parts = []
+            for sym in np.unique(symbol_keys):
+                row_idx_np = np.where(symbol_keys == sym)[0]
+                row_idx = torch.as_tensor(row_idx_np, device=self.device, dtype=torch.long)
+                batch_states = states_t.index_select(0, row_idx)
+                batch_next_states = next_states_t.index_select(0, row_idx)
+                batch_actions = actions_t.index_select(0, row_idx)
+                current_q_parts.append(
+                    self.policy_net(batch_states, symbol=sym).gather(1, batch_actions)
+                )
+                with torch.no_grad():
+                    next_actions = self.policy_net(batch_next_states, symbol=sym).argmax(1, keepdim=True)
+                    next_q_parts.append(
+                        self.target_net(batch_next_states, symbol=sym).gather(1, next_actions)
+                    )
+                order_parts.append(row_idx)
+
+            restore_order = torch.argsort(torch.cat(order_parts))
+            current_q = torch.cat(current_q_parts, dim=0).index_select(0, restore_order)
+            next_q = torch.cat(next_q_parts, dim=0).index_select(0, restore_order)
         else:
             current_q = self.policy_net(states_t).gather(1, actions_t)
             with torch.no_grad():
