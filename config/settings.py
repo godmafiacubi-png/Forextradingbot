@@ -131,7 +131,7 @@ MAX_TRADES_PER_SYMBOL = 1
 # ============================================================
 ATR_SL_MULTIPLIER = 1.5
 ATR_TP_MULTIPLIER = 3.0
-TRAILING_STOP_ATR = 1.5
+TRAILING_STOP_ATR = 1.0
 BREAKEVEN_ATR = 1.0
 MAX_DRAWDOWN_PERCENT = 10.0
 
@@ -182,9 +182,9 @@ COOLDOWN_MINUTES = 60
 # PARTIAL CLOSE
 # ============================================================
 PARTIAL_CLOSE_ENABLED = True
-PARTIAL_CLOSE_1_ATR = 1.5
+PARTIAL_CLOSE_1_ATR = 1.0
 PARTIAL_CLOSE_1_PCT = 0.3
-PARTIAL_CLOSE_2_ATR = 2.5
+PARTIAL_CLOSE_2_ATR = 2.0
 PARTIAL_CLOSE_2_PCT = 0.30
 
 # ============================================================
