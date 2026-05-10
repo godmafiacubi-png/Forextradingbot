@@ -181,6 +181,32 @@ class RegimeModelSet:
             }
             self.scalers[regime] = StandardScaler()
 
+    def _class_balance_params(self, y: np.ndarray) -> Dict[str, float]:
+        pos = int(np.sum(y == 1))
+        neg = int(np.sum(y == 0))
+        if pos == 0 or neg == 0:
+            return {"scale_pos_weight": 1.0, "pos_weight": 1.0, "neg_weight": 1.0}
+        total = len(y)
+        return {
+            "scale_pos_weight": float(np.clip(neg / pos, 0.25, 4.0)),
+            "pos_weight": float(np.clip(total / (2.0 * pos), 0.25, 4.0)),
+            "neg_weight": float(np.clip(total / (2.0 * neg), 0.25, 4.0)),
+        }
+
+    def _sample_weights(self, y: np.ndarray) -> np.ndarray:
+        balance = self._class_balance_params(y)
+        return np.where(y == 1, balance["pos_weight"], balance["neg_weight"]).astype(np.float32)
+
+    def _configure_class_balance(self, regime: str, y: np.ndarray):
+        balance = self._class_balance_params(y)
+        try:
+            self.models[regime]["xgb"].set_params(scale_pos_weight=balance["scale_pos_weight"])
+            self.models[regime]["rf"].set_params(
+                class_weight={0: balance["neg_weight"], 1: balance["pos_weight"]}
+            )
+        except Exception as exc:
+            logger.debug(f"[RegimeModels] Could not set class weights for {regime}: {exc}")
+
     def train_regime(self, regime: str, X: np.ndarray, y: np.ndarray) -> bool:
         if not SKLEARN_AVAILABLE:
             return False
@@ -190,6 +216,7 @@ class RegimeModelSet:
 
         try:
             X_scaled = self.scalers[regime].fit_transform(X)
+            self._configure_class_balance(regime, y)
             self.models[regime]["xgb"].fit(X_scaled, y, verbose=False)
             self.models[regime]["rf"].fit(X_scaled, y)
             self.is_trained[regime] = True
@@ -392,6 +419,7 @@ class RegimeAwareEnsemble:
             "n_samples": len(y),
             "n_features": self.n_features,
             "regime_stats": self.regime_models.get_stats(),
+            "uses_class_balancing": True,
         }
         logger.info(f"[RegimeEnsemble] Trained: {len(y)} samples, {self.n_features} features")
         return True
