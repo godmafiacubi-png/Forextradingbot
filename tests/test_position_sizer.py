@@ -43,3 +43,28 @@ def test_position_sizer_blocks_when_drawdown_limit_is_exceeded(monkeypatch):
 
     assert sizer.calculate_position_size(10_000, 0.001, 0.00001) == 0.1
     assert sizer.calculate_position_size(8_500, 0.001, 0.00001) == 0.0
+
+
+def test_atr_position_sizing_matches_actual_sl_multiplier(monkeypatch):
+    module = _install_mt5_stub(monkeypatch, _SymbolInfo())
+    sizer = module.PositionSizer(method="ATR", account_risk=1.0, max_lot_size=10.0)
+
+    one_atr_lot = sizer.calculate_position_size(
+        account_balance=10_000,
+        atr_value=0.001,
+        symbol_point=0.00001,
+        confidence=1.0,
+        symbol="EURUSDm",
+        sl_multiplier=1.0,
+    )
+    wider_sl_lot = sizer.calculate_position_size(
+        account_balance=10_000,
+        atr_value=0.001,
+        symbol_point=0.00001,
+        confidence=1.0,
+        symbol="EURUSDm",
+        sl_multiplier=2.0,
+    )
+
+    assert one_atr_lot == 1.0
+    assert wider_sl_lot == 0.5

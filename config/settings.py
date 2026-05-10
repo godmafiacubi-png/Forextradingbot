@@ -130,7 +130,11 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 # EXECUTION SAFETY
 # ============================================================
-DRY_RUN = _env_bool('DRY_RUN', False)
+DRY_RUN_REQUESTED = _env_bool('DRY_RUN', True)
+LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', False)
+# Fail-safe: live order routing is enabled only when DRY_RUN=false and
+# LIVE_TRADING_CONFIRMED=true are both set explicitly in the environment.
+DRY_RUN = DRY_RUN_REQUESTED or not LIVE_TRADING_CONFIRMED
 ORDER_MAGIC = _env_int('ORDER_MAGIC', 123456)
 ORDER_DEVIATION = _env_int('ORDER_DEVIATION', 20)
 MAX_LOT_SIZE = _env_float('MAX_LOT_SIZE', 2.0)
@@ -224,6 +228,22 @@ MAX_CURRENCY_EXPOSURE = 5
 # ============================================================
 MAX_SPREAD_MULTIPLIER = 3.0
 SPREAD_AVG_PERIOD = 50
+MAX_SPREAD_POINTS = {
+    'EURUSDm': 25,
+    'GBPUSDm': 30,
+    'USDJPYm': 30,
+    'BTCUSDm': 5000,
+    'XAUUSDm': 120,
+}
+DEFAULT_MAX_SPREAD_POINTS = 50
+MAX_SLIPPAGE_POINTS = {
+    'EURUSDm': 10,
+    'GBPUSDm': 12,
+    'USDJPYm': 12,
+    'BTCUSDm': 2000,
+    'XAUUSDm': 80,
+}
+DEFAULT_MAX_SLIPPAGE_POINTS = 20
 
 # ============================================================
 # COMPOUNDING & CONFIDENCE SCALING — เปิด!

@@ -76,6 +76,8 @@ RISK_CONFIG = {
     'ACCOUNT_RISK_PERCENT': ACCOUNT_RISK_PERCENT,
     'MAX_OPEN_TRADES': MAX_OPEN_TRADES,
     'MAX_LOT_SIZE': MAX_LOT_SIZE,
+    'MAX_SPREAD_POINTS': MAX_SPREAD_POINTS,
+    'DEFAULT_MAX_SPREAD_POINTS': DEFAULT_MAX_SPREAD_POINTS,
 }
 
 
@@ -186,6 +188,7 @@ class TradingBot:
     def __init__(self):
         logger.info("=" * 80)
         logger.info(f"TRADING BOT v7.1 Deep RL | {BOT_MODE} | Port: {DASHBOARD_PORT}")
+        logger.info(f"Execution safety: DRY_RUN={DRY_RUN} | LIVE_TRADING_CONFIRMED={LIVE_TRADING_CONFIRMED}")
         logger.info("Dueling DQN + PER + N-step + Market Regime")
         logger.info("=" * 80)
 
@@ -810,7 +813,11 @@ class TradingBot:
             if signal == 0:
                 blocked = "HOLD"
             elif not spread_ok:
-                blocked = f"Spread {cur_spread:.1f} > {avg_spread*MAX_SPREAD_MULTIPLIER:.1f} (avg:{avg_spread:.1f})"
+                max_spread = MAX_SPREAD_POINTS.get(symbol, DEFAULT_MAX_SPREAD_POINTS)
+                if avg_spread <= 0 and max_spread is not None:
+                    blocked = f"Spread {cur_spread:.1f} > cap {max_spread:.1f}"
+                else:
+                    blocked = f"Spread {cur_spread:.1f} > {avg_spread*MAX_SPREAD_MULTIPLIER:.1f} (avg:{avg_spread:.1f})"
             elif not hub_result.meta_trade:
                 blocked = f"Meta filter ({hub_result.meta_activity:.0%} < threshold)"
             elif ict_score < sym_min_ict:
@@ -924,7 +931,8 @@ class TradingBot:
                 return
 
             lot = self.position_sizer.calculate_position_size(
-                ai['equity'], atr, sp, confidence, symbol=symbol
+                ai['equity'], atr, sp, confidence, symbol=symbol,
+                sl_multiplier=sl_mult
             )
             if lot <= 0:
                 return
@@ -934,7 +942,11 @@ class TradingBot:
 
             logger.info(f"  [{symbol}] EXEC: {signal_name} {lot}lots @{price:.5f} SL={sl:.5f} TP={tp:.5f} R:R=1:{rr:.1f} [{regime_name}]")
 
-            ticket = self.order_manager.place_order(symbol, ot, lot, sl, tp, f"v71_{signal_name}_{quality_grade}_{regime_name[:3]}")
+            max_slippage = MAX_SLIPPAGE_POINTS.get(symbol, DEFAULT_MAX_SLIPPAGE_POINTS)
+            ticket = self.order_manager.place_order(
+                symbol, ot, lot, sl, tp, f"v71_{signal_name}_{quality_grade}_{regime_name[:3]}",
+                reference_price=price, max_slippage_points=max_slippage
+            )
 
             if ticket:
                 self.daily_trades += 1

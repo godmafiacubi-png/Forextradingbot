@@ -64,3 +64,23 @@ def test_place_order_rounds_volume_to_broker_step(monkeypatch):
     assert sent[0]["volume"] == 0.123
     assert sent[0]["magic"] == 99
     assert sent[0]["deviation"] == 5
+
+
+def test_place_order_blocks_when_slippage_exceeds_guard(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    manager = module.OrderManager(_Connector(), dry_run=False, magic=99, deviation=5)
+
+    ticket = manager.place_order(
+        "EURUSDm",
+        module.mt5.ORDER_TYPE_BUY,
+        0.1,
+        1.099,
+        1.102,
+        "test",
+        reference_price=1.10000,
+        max_slippage_points=10,
+    )
+
+    assert ticket is None
+    assert sent == []
