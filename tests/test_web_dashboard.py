@@ -47,7 +47,8 @@ def test_default_dashboard_renders_improved_sections_and_json_api():
         }
     ]
     web_dashboard.dashboard_state["signals"] = {"EURUSDm": {"signal": "BUY", "confidence": 0.72}}
-    web_dashboard.dashboard_state["risk_guard"] = {"status": "OK"}
+    web_dashboard.dashboard_state["symbols"] = {"EURUSDm": {"price": 1.08334, "adx": 24.125}}
+    web_dashboard.dashboard_state["risk_guard"] = {"status": "OK", "drawdown_pct": -0.1399}
 
     server = web_dashboard.start_dashboard(port=0, host="127.0.0.1", open_browser=False)
     port = server.server_address[1]
@@ -68,5 +69,8 @@ def test_default_dashboard_renders_improved_sections_and_json_api():
     assert "Open Positions (1)" in html
     assert "Risk Guard" in html
     assert "API State" in html
+    assert "kv-chip" in html
+    assert "72.00%" in html
+    assert "-0.14%" in html
     assert '"EURUSDm"' in payload
     assert '"ok": true' in health
