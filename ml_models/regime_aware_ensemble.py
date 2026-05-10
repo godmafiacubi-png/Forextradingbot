@@ -263,6 +263,7 @@ class RegimeAwareEnsemble:
         self.feature_cols: Optional[List[str]] = None
         self.is_trained = False
         self.n_features: Optional[int] = None
+        self.feature_medians: Dict[str, float] = {}
 
         self._train_stats: Dict = {}
 
@@ -289,13 +290,15 @@ class RegimeAwareEnsemble:
         if not available:
             return None
 
-        X = df[available].values.copy()
-        X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
-
-        # Pad missing columns with zeros
-        if len(available) < len(self.feature_cols):
-            pad = np.zeros((len(X), len(self.feature_cols) - len(available)))
-            X = np.hstack([X, pad])
+        X = np.empty((len(df), len(self.feature_cols)), dtype=np.float32)
+        for i, col in enumerate(self.feature_cols):
+            default = float(self.feature_medians.get(col, 0.0))
+            if col in df.columns:
+                values = np.asarray(df[col].replace([np.inf, -np.inf], np.nan), dtype=np.float32)
+                values = np.nan_to_num(values, nan=default, posinf=default, neginf=default)
+                X[:, i] = values
+            else:
+                X[:, i] = default
 
         # Append symbol embedding
         emb = self.symbol_embedding.get_embedding(symbol)
@@ -314,17 +317,24 @@ class RegimeAwareEnsemble:
             if not self.feature_cols:
                 return None, None
 
-            X = df[self.feature_cols].values.copy()
-            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+            raw_X = df[self.feature_cols].replace([np.inf, -np.inf], np.nan)
+            medians = raw_X.median(numeric_only=True).fillna(0.0)
+            self.feature_medians = {col: float(medians.get(col, 0.0)) for col in self.feature_cols}
+            X = raw_X.fillna(medians).values.astype(np.float32)
 
-            if "c" not in df.columns:
+            close_col = None
+            for cname in ("c", "close", "Close", "CLOSE", "price", "last"):
+                if cname in df.columns:
+                    close_col = cname
+                    break
+            if close_col is None:
                 return None, None
 
             LABEL_LOOKAHEAD = ML_LABEL_LOOKAHEAD
             LABEL_THRESHOLD = ML_LABEL_THRESHOLD
             MIN_CLASS_BALANCE = ML_LABEL_MIN_BALANCE
             MAX_CLASS_BALANCE = ML_LABEL_MAX_BALANCE
-            close = df["c"]
+            close = df[close_col]
             future_close = close.shift(-LABEL_LOOKAHEAD)
             threshold = close * LABEL_THRESHOLD
             y = (future_close > close + threshold).astype(int).values
@@ -461,6 +471,7 @@ class RegimeAwareEnsemble:
                     "feature_cols": self.feature_cols,
                     "is_trained": self.is_trained,
                     "n_features": self.n_features,
+                    "feature_medians": self.feature_medians,
                     "train_stats": self._train_stats,
                 }, f)
             logger.info(f"[RegimeEnsemble] Saved to {path}")
@@ -479,6 +490,7 @@ class RegimeAwareEnsemble:
             self.feature_cols = data["feature_cols"]
             self.is_trained = data["is_trained"]
             self.n_features = data["n_features"]
+            self.feature_medians = data.get("feature_medians", {})
             self._train_stats = data.get("train_stats", {})
             logger.info(f"[RegimeEnsemble] Loaded from {path}")
             return True
@@ -491,6 +503,7 @@ class RegimeAwareEnsemble:
             "is_trained": self.is_trained,
             "n_features": self.n_features,
             "feature_cols_count": len(self.feature_cols) if self.feature_cols else 0,
+            "feature_medians_count": len(self.feature_medians),
             "regime_models": self.regime_models.get_stats(),
             "embedding_dim": self.embedding_dim,
             "train_stats": self._train_stats,

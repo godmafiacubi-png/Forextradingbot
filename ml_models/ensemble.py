@@ -73,6 +73,7 @@ class EnsembleModel:
         self.n_features = None
         self.model_weights = {"xgb": 0.5, "rf": 0.5}
         self.validation_metrics = {}
+        self.feature_medians = {}
 
         # ---- Regime-aware ensemble ----
         self.use_regime_models = use_regime_models
@@ -210,8 +211,10 @@ class EnsembleModel:
                 logger.warning("No feature columns found")
                 return None, None
 
-            X = df[feature_cols].values
-            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
+            raw_X = df[feature_cols].replace([np.inf, -np.inf], np.nan)
+            medians = raw_X.median(numeric_only=True).fillna(0.0)
+            self.feature_medians = {col: float(medians.get(col, 0.0)) for col in feature_cols}
+            X = raw_X.fillna(medians).values.astype(np.float32)
             X = self.scaler.fit_transform(X)
 
             # หา close column — รองรับทุก naming convention
@@ -352,6 +355,38 @@ class EnsembleModel:
         self.xgb_model.fit(X, y, verbose=False)
         self.rf_model.fit(X, y)
 
+
+    def _build_feature_matrix(self, df, min_coverage: float = 0.5):
+        """Build inference features in training order with median imputation.
+
+        Live bars can omit expensive/slow indicators. Filling absent columns with
+        the training median keeps scaled values near neutral instead of turning a
+        raw zero into a misleading outlier after StandardScaler.transform().
+        """
+        if not self.feature_cols:
+            return None, 0.0
+
+        n_rows = len(df)
+        matched_cols = [c for c in self.feature_cols if c in df.columns]
+        coverage = len(matched_cols) / len(self.feature_cols)
+
+        if coverage < min_coverage:
+            logger.warning(
+                f"[Ensemble] Feature coverage {coverage:.0%} "
+                f"({len(matched_cols)}/{len(self.feature_cols)}) — returning 0.5"
+            )
+            return None, coverage
+
+        X = np.empty((n_rows, len(self.feature_cols)), dtype=np.float32)
+        for i, col in enumerate(self.feature_cols):
+            default = float(self.feature_medians.get(col, 0.0))
+            if col in df.columns:
+                values = pd.to_numeric(df[col], errors="coerce").replace([np.inf, -np.inf], np.nan)
+                X[:, i] = values.fillna(default).to_numpy(dtype=np.float32)
+            else:
+                X[:, i] = default
+        return X, coverage
+
     # ----------------------------------------------------------
     # Prediction
     # ----------------------------------------------------------
@@ -371,23 +406,10 @@ class EnsembleModel:
                 return np.full(len(df), 0.5)
 
             # ---- Base model predictions ----
-            # Build X ให้ครบ feature_cols เสมอ — pad zeros สำหรับ cols ที่ขาด
             n_rows = len(df)
-            matched_cols = [c for c in self.feature_cols if c in df.columns]
-            coverage = len(matched_cols) / len(self.feature_cols)
-
-            if coverage < 0.5:
-                logger.warning(
-                    f"[Ensemble] Feature coverage {coverage:.0%} "
-                    f"({len(matched_cols)}/{len(self.feature_cols)}) — returning 0.5"
-                )
+            X, coverage = self._build_feature_matrix(df, min_coverage=0.5)
+            if X is None:
                 return np.full(n_rows, 0.5)
-
-            X = np.zeros((n_rows, len(self.feature_cols)), dtype=np.float32)
-            for i, col in enumerate(self.feature_cols):
-                if col in df.columns:
-                    X[:, i] = df[col].values
-            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
 
             try:
                 X = self.scaler.transform(X)
@@ -474,9 +496,11 @@ class EnsembleModel:
                 "name": os.path.basename(path),
                 "n_features": self.n_features,
                 "is_trained": self.is_trained,
-                "version": "2.1",
+                "version": "2.2",
                 "model_weights": self.model_weights,
+                "feature_medians": self.feature_medians,
                 "validation_metrics": self.validation_metrics,
+                "feature_medians_count": len(self.feature_medians),
             }
             with open(os.path.join(path, "metadata.pkl"), "wb") as f:
                 pickle.dump(metadata, f)
@@ -487,7 +511,7 @@ class EnsembleModel:
             if self.regime_ensemble:
                 self.regime_ensemble.save(os.path.join(path, "regime"))
 
-            logger.info(f"EnsembleModel v2.0 saved to {path}")
+            logger.info(f"EnsembleModel v2.2 saved to {path}")
         except Exception as e:
             logger.error(f"Save error: {e}", exc_info=True)
 
@@ -512,13 +536,14 @@ class EnsembleModel:
                 self.is_trained = meta.get("is_trained", True)
                 self.model_weights = meta.get("model_weights", self.model_weights)
                 self.validation_metrics = meta.get("validation_metrics", self.validation_metrics)
+                self.feature_medians = meta.get("feature_medians", self.feature_medians)
 
             # Load regime ensemble
             regime_path = os.path.join(path, "regime")
             if self.regime_ensemble and os.path.exists(regime_path):
                 self.regime_ensemble.load(regime_path)
 
-            logger.info(f"EnsembleModel v2.0 loaded from {path}")
+            logger.info(f"EnsembleModel v2.2 loaded from {path}")
             return True
         except Exception as e:
             logger.error(f"Load error: {e}", exc_info=True)
@@ -530,13 +555,14 @@ class EnsembleModel:
 
     def get_stats(self) -> Dict:
         stats = {
-            "version": "2.0",
+            "version": "2.2",
             "is_trained": self.is_trained,
             "n_features": self.n_features,
             "current_symbol": self._current_symbol,
             "current_regime": self._current_regime,
             "model_weights": self.model_weights,
             "validation_metrics": self.validation_metrics,
+            "feature_medians_count": len(self.feature_medians),
         }
         if self.regime_ensemble:
             stats["regime_ensemble"] = self.regime_ensemble.get_stats()
