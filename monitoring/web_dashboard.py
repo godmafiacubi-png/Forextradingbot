@@ -192,54 +192,127 @@ def _render_kv_table(data: Any, empty: str = 'No data yet.') -> str:
     return ''.join(rows)
 
 
+def _state_get(data: Any, key: str, default: Any = 0) -> Any:
+    """Read a value from dict-like or object-like dashboard payloads."""
+    if isinstance(data, dict):
+        return data.get(key, default)
+    return getattr(data, key, default)
+
+
+def _pct(value: Any, scale_unit_interval: bool = True, decimals: int = 0) -> str:
+    try:
+        numeric = float(value or 0)
+    except (TypeError, ValueError):
+        numeric = 0.0
+    if scale_unit_interval and abs(numeric) <= 1:
+        numeric *= 100
+    return f"{numeric:.{decimals}f}%"
+
+
+def _money(value: Any) -> str:
+    try:
+        return f"${float(value or 0):.2f}"
+    except (TypeError, ValueError):
+        return f"${escape(str(value))}"
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return default
+
+
 def _render_positions() -> str:
     positions = dashboard_state.get('open_positions') or []
     if not positions:
-        return '<tr><td colspan="8" class="muted">No open positions.</td></tr>'
+        return '<tr><td colspan="9" class="muted empty-row">No open positions</td></tr>'
     rows = []
     for pos in positions:
-        side = pos.get('side', '') if isinstance(pos, dict) else ''
-        pnl = pos.get('pnl', 0) if isinstance(pos, dict) else 0
+        if not isinstance(pos, dict):
+            continue
+        side = str(pos.get('side', ''))
+        pnl = pos.get('pnl', 0)
         try:
             pnl_value = float(pnl or 0)
         except (TypeError, ValueError):
             pnl_value = 0.0
+        side_class = 'signal-buy' if side.upper() == 'BUY' else 'signal-sell'
         rows.append(
             '<tr>'
-            f'<td>{escape(str(pos.get("ticket", "")))}</td>'
-            f'<td>{escape(str(pos.get("symbol", "")))}</td>'
-            f'<td><span class="badge {_badge_class(side)}">{escape(str(side))}</span></td>'
+            f'<td>#{escape(str(pos.get("ticket", "")))}</td>'
+            f'<td><strong>{escape(str(pos.get("symbol", "")))}</strong></td>'
+            f'<td class="{side_class}">{escape(side)}</td>'
             f'<td>{escape(_format_number(pos.get("volume", 0), 2))}</td>'
             f'<td>{escape(_format_number(pos.get("entry", 0), 5))}</td>'
             f'<td>{escape(_format_number(pos.get("current_price", 0), 5))}</td>'
             f'<td>{escape(_format_number(pos.get("sl", 0), 5))}</td>'
-            f'<td class="{_badge_class("PROFIT" if pnl_value >= 0 else "LOSS")}">{escape(_format_number(pnl, 2))}</td>'
+            f'<td>{escape(_format_number(pos.get("tp", 0), 5))}</td>'
+            f'<td class="{"pnl-pos" if pnl_value >= 0 else "pnl-neg"}">{escape(_money(pnl))}</td>'
             '</tr>'
         )
-    return ''.join(rows)
+    return ''.join(rows) or '<tr><td colspan="9" class="muted empty-row">No open positions</td></tr>'
+
+
+def _mini_stat(label: str, value: Any, css_class: str = '') -> str:
+    return (
+        '<div class="mini-stat kv-chip">'
+        f'<span class="label">{escape(label)}</span>'
+        f'<span class="value {css_class}">{escape(str(value))}</span>'
+        '</div>'
+    )
+
+
+def _render_regimes() -> str:
+    regimes = dashboard_state.get('regime_stats') or {}
+    if not isinstance(regimes, dict) or not regimes:
+        return _mini_stat('Waiting:', '—')
+    chips = []
+    for symbol, regime in regimes.items():
+        regime_text = str(regime)
+        chips.append(_mini_stat(f'{str(symbol)[:6]}:', regime_text, f'regime-{regime_text.lower()}'))
+    return ''.join(chips)
+
+
+def _render_logs() -> str:
+    logs = dashboard_state.get('log_messages') or []
+    rows = []
+    for item in reversed(logs[-50:]):
+        if isinstance(item, dict):
+            log_time = item.get('time', '')
+            msg = item.get('msg', '')
+        else:
+            log_time = ''
+            msg = item
+        rows.append(
+            '<div class="log-line">'
+            f'<span class="log-time">{escape(str(log_time))}</span> {escape(str(msg))}'
+            '</div>'
+        )
+    return ''.join(rows) or '<div class="log-line muted">No log messages yet.</div>'
 
 
 def _render_html() -> str:
     account = dashboard_state.get('account') or {}
-    logs = dashboard_state.get('log_messages') or []
-    recent_logs = logs[-30:]
-    log_rows = ''.join(
-        f"<li><span>{escape(str(item.get('time', '')))}</span> {escape(str(item.get('msg', '')))}</li>"
-        for item in recent_logs
-    ) or '<li class="muted">No log messages yet.</li>'
+    tracker = dashboard_state.get('tracker_stats') or {}
+    risk = dashboard_state.get('risk_guard') or {}
+    quality = dashboard_state.get('quality_stats') or {}
+    adaptive = dashboard_state.get('adaptive') or {}
+    m30 = dashboard_state.get('m30_stats') or {}
+    streak = dashboard_state.get('streak') or {}
+    rl = dashboard_state.get('rl_stats') or {}
+    status = str(dashboard_state.get('bot_status', 'STOPPED'))
 
-    status = dashboard_state.get('bot_status', 'STOPPED')
     profit = account.get('profit', 0)
-    daily_pnl = dashboard_state.get('daily_pnl', 0)
-    try:
-        profit_value = float(profit or 0)
-    except (TypeError, ValueError):
-        profit_value = 0.0
-    try:
-        daily_pnl_value = float(daily_pnl or 0)
-    except (TypeError, ValueError):
-        daily_pnl_value = 0.0
-    open_positions = dashboard_state.get('open_positions') or []
+    growth = account.get('growth_pct', 0)
+    total_pnl = _state_get(tracker, 'total_pnl', 0)
+    daily_pnl = risk.get('daily_pnl', dashboard_state.get('daily_pnl', 0)) if isinstance(risk, dict) else dashboard_state.get('daily_pnl', 0)
+
+    def signed_class(value: Any) -> str:
+        try:
+            return 'positive' if float(value or 0) >= 0 else 'negative'
+        except (TypeError, ValueError):
+            return 'neutral'
 
     return f"""<!doctype html>
 <html lang="en">
@@ -247,106 +320,94 @@ def _render_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="5">
-  <title>Trading Bot Dashboard</title>
+  <title>⚡ Trading Bot v7.1 Dashboard</title>
   <style>
-    :root {{ color-scheme: dark; --bg:#07111f; --panel:#0f1b2d; --panel2:#13243a; --line:#263a56; --text:#eef5ff; --muted:#93a8c2; --green:#2ee59d; --red:#ff6b7a; --amber:#ffd166; --blue:#60a5fa; }}
-    * {{ box-sizing: border-box; }}
-    body {{ margin:0; min-height:100vh; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Arial, sans-serif; background: radial-gradient(circle at top left, #12355f 0, transparent 32rem), var(--bg); color: var(--text); }}
-    .wrap {{ width:min(1400px, calc(100% - 32px)); margin:0 auto; padding:28px 0 48px; }}
-    .hero {{ display:flex; justify-content:space-between; gap:18px; align-items:flex-start; margin-bottom:22px; }}
-    h1 {{ margin:0; font-size:clamp(1.8rem, 4vw, 3.2rem); letter-spacing:-.04em; }}
-    h2 {{ margin:0 0 14px; font-size:1rem; letter-spacing:.08em; text-transform:uppercase; color:#cfe2ff; }}
-    .subtitle {{ color:var(--muted); margin-top:8px; }}
-    .pill, .badge {{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:7px 12px; font-weight:700; font-size:.85rem; border:1px solid var(--line); background:rgba(255,255,255,.04); }}
-    .positive {{ color:var(--green); }} .negative {{ color:var(--red); }} .neutral {{ color:var(--amber); }} .muted {{ color:var(--muted); }}
-    .grid {{ display:grid; grid-template-columns: repeat(12, 1fr); gap:16px; }}
-    .card {{ grid-column: span 12; background:linear-gradient(180deg, rgba(19,36,58,.92), rgba(12,24,40,.92)); border:1px solid var(--line); border-radius:22px; padding:20px; box-shadow:0 18px 50px rgba(0,0,0,.25); min-width:0; }}
-    .span-3 {{ grid-column: span 3; }} .span-4 {{ grid-column: span 4; }} .span-6 {{ grid-column: span 6; }} .span-8 {{ grid-column: span 8; }}
-    .metric {{ min-height:128px; display:flex; flex-direction:column; justify-content:space-between; }}
-    .label {{ color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spacing:.12em; }}
-    .value {{ font-size:clamp(1.5rem, 3vw, 2.5rem); font-weight:800; letter-spacing:-.04em; margin-top:8px; }}
-    .hint {{ color:var(--muted); font-size:.86rem; margin-top:10px; }}
-    .table-scroll {{ overflow:auto; max-height:520px; }}
-    table {{ width:100%; border-collapse:collapse; overflow:hidden; }}
-    th, td {{ border-bottom:1px solid rgba(147,168,194,.18); padding:12px 10px; text-align:left; vertical-align:top; }}
-    th {{ color:#bdd2ee; font-size:.8rem; text-transform:uppercase; letter-spacing:.08em; }}
-    pre {{ white-space:pre-wrap; word-break:break-word; margin:0; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color:#dcecff; }}
-    details {{ margin-top:8px; }} details summary {{ cursor:pointer; color:var(--muted); font-size:.78rem; }}
-    .kv-chips {{ display:flex; flex-wrap:wrap; gap:8px; }}
-    .kv-chip {{ display:flex; gap:6px; align-items:baseline; border:1px solid rgba(147,168,194,.16); background:rgba(255,255,255,.035); border-radius:10px; padding:6px 8px; }}
-    .kv-chip span {{ color:var(--muted); font-size:.72rem; text-transform:uppercase; }}
-    .kv-chip strong, .scalar {{ font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-    ul {{ padding-left:1.1rem; margin:0; max-height:420px; overflow:auto; }}
-    li {{ margin:.48rem 0; }} li span {{ color:var(--blue); font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }}
-    .toolbar {{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:10px; }}
-    a {{ color:#93c5fd; text-decoration:none; }} a:hover {{ text-decoration:underline; }}
-    @media (max-width: 980px) {{ .span-3, .span-4, .span-6, .span-8 {{ grid-column: span 12; }} .hero {{ flex-direction:column; }} .toolbar {{ justify-content:flex-start; }} }}
+    * {{ margin:0; padding:0; box-sizing:border-box; }}
+    body {{ background:#050000; color:#e1e5ea; font-family:'Segoe UI', Consolas, monospace; font-size:14px; padding:15px; }}
+    .header {{ display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:linear-gradient(135deg,#1a0a0a,#2d0a0a); border:1px solid #5c1a1a; border-radius:10px; margin-bottom:15px; }}
+    .header h1 {{ font-size:22px; background:linear-gradient(90deg,#ff4444,#ff8800); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
+    .mode-badge {{ display:inline-block; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:700; background:#d32f2f; color:#fff; margin:2px 0 0 10px; }}
+    .header-info {{ color:#8a6a6a; font-size:12px; }}
+    .status-badge {{ padding:8px 18px; border-radius:20px; font-weight:800; font-size:13px; text-transform:uppercase; }}
+    .status-running {{ background:#ff6d00; color:#000; }} .status-stopped {{ background:#ff1744; color:#fff; }}
+    .grid {{ display:grid; grid-template-columns:repeat(2,minmax(320px,1fr)); gap:15px; margin-bottom:15px; }}
+    .grid-3 {{ display:grid; grid-template-columns:repeat(3,minmax(250px,1fr)); gap:15px; margin-bottom:15px; }}
+    .card {{ background:#1a0e0e; border:1px solid #3d1a1a; border-radius:10px; padding:18px; }}
+    .card h2 {{ font-size:14px; color:#ff8800; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; border-bottom:1px solid #3d1a1a; padding-bottom:8px; }}
+    .account-grid,.stats-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }}
+    .account-item,.stat-item {{ background:#1f1212; border-radius:8px; padding:13px 10px; }}
+    .account-item {{ text-align:center; }} .account-label,.stat-label {{ font-size:11px; color:#8a6a6a; text-transform:uppercase; }}
+    .account-value {{ font-size:22px; font-weight:800; margin-top:6px; }} .stat-value {{ font-size:16px; font-weight:800; margin-top:5px; }}
+    .positive,.pnl-pos {{ color:#00e676; }} .negative,.pnl-neg {{ color:#ff1744; }} .neutral {{ color:#ff8800; }}
+    .mini-stats {{ display:flex; gap:10px; flex-wrap:wrap; }} .mini-stat {{ padding:8px 12px; background:#1f1212; border-radius:6px; font-size:12px; }}
+    .mini-stat .label {{ color:#8a6a6a; }} .mini-stat .value {{ font-weight:800; margin-left:4px; }}
+    table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding:10px; color:#ff8800; font-size:11px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #3d1a1a; }}
+    td {{ padding:10px; border-bottom:1px solid #1a0e0e; font-size:13px; }} tr:hover {{ background:#1f1212; }}
+    .signal-buy {{ color:#00e676; font-weight:800; }} .signal-sell {{ color:#ff1744; font-weight:800; }} .muted {{ color:#6b4a4a; }} .empty-row {{ text-align:center; padding:15px; }}
+    .log-box {{ max-height:300px; overflow-y:auto; font-family:Consolas, monospace; font-size:12px; background:#050000; padding:10px; border-radius:8px; }}
+    .log-line {{ padding:3px 0; border-bottom:1px solid #1a0e0e; }} .log-time {{ color:#6b4a4a; margin-right:6px; }}
+    .grade-a {{ color:#00e676; font-weight:800; }} .grade-b,.regime-ranging {{ color:#ffc107; font-weight:800; }} .grade-d,.regime-volatile {{ color:#ff1744; font-weight:800; }} .regime-trending {{ color:#00e676; font-weight:800; }} .regime-quiet {{ color:#7b8aa0; font-weight:800; }}
+    .footer {{ text-align:center; padding:10px; color:#5c3a3a; font-size:12px; }} .footer a {{ color:#8a6a6a; text-decoration:none; }}
+    @media (max-width:980px) {{ .grid,.grid-3 {{ grid-template-columns:1fr; }} .header {{ align-items:flex-start; gap:12px; flex-direction:column; }} }}
   </style>
 </head>
 <body>
-  <main class="wrap">
-    <header class="hero">
-      <div>
-        <h1>Trading Bot Dashboard</h1>
-        <div class="subtitle">Mode: <strong>{escape(str(dashboard_state.get('mode', 'DEFAULT')))}</strong> · Iteration {escape(str(dashboard_state.get('iteration', 0)))} · Last update {escape(str(dashboard_state.get('last_update') or 'waiting for data'))}</div>
+  <div class="header">
+    <div>
+      <h1>⚡ Trading Bot v7.1</h1>
+      <span class="mode-badge">{escape(str(dashboard_state.get('mode', 'DEFAULT'))).upper()}</span>
+      <div class="header-info">Trading Bot Dashboard · Port: {escape(str(dashboard_state.get('dashboard_port', 5001)))} | Iter #{escape(str(dashboard_state.get('iteration', 0)))} | {escape(str(dashboard_state.get('last_update') or 'waiting for data'))} | Daily: {escape(_money(dashboard_state.get('daily_pnl', 0)))} | Compounding: ON</div>
+    </div>
+    <span class="status-badge {'status-running' if status == 'RUNNING' else 'status-stopped'}">{escape(status)}</span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>💰 Account</h2>
+      <div class="account-grid">
+        <div class="account-item"><div class="account-label">Balance</div><div class="account-value neutral">{escape(_money(account.get('balance', 0)))}</div></div>
+        <div class="account-item"><div class="account-label">Equity</div><div class="account-value neutral">{escape(_money(account.get('equity', 0)))}</div></div>
+        <div class="account-item"><div class="account-label">Floating P/L</div><div class="account-value {signed_class(profit)}">{escape(_money(profit))}</div></div>
+        <div class="account-item"><div class="account-label">Growth</div><div class="account-value {signed_class(growth)}" style="font-size:26px">{escape(_pct(growth, scale_unit_interval=False, decimals=1))}</div></div>
       </div>
-      <div class="toolbar">
-        <span class="pill {_badge_class(status)}">● {escape(str(status))}</span>
-        <a class="pill" href="/api/state">API State</a>
-        <a class="pill" href="/health">Health</a>
+    </div>
+    <div class="card">
+      <h2>📊 Performance</h2>
+      <div class="stats-grid">
+        <div class="stat-item"><div class="stat-label">Total Trades</div><div class="stat-value">{escape(str(_state_get(tracker, 'total_trades', 0)))}</div></div>
+        <div class="stat-item"><div class="stat-label">Win Rate</div><div class="stat-value {signed_class(_state_get(tracker, 'win_rate', 0))}">{escape(_pct(_state_get(tracker, 'win_rate', 0), decimals=1))}</div></div>
+        <div class="stat-item"><div class="stat-label">Total P/L</div><div class="stat-value {signed_class(total_pnl)}">{escape(_money(total_pnl))}</div></div>
+        <div class="stat-item"><div class="stat-label">Profit Factor</div><div class="stat-value">{escape(_format_number(_state_get(tracker, 'profit_factor', 0), 2))}</div></div>
       </div>
-    </header>
+    </div>
+  </div>
 
-    <section class="grid">
-      <article class="card metric span-3"><div><div class="label">Balance</div><div class="value">{escape(_format_number(account.get('balance', 0)))}</div></div><div class="hint">Account cash balance</div></article>
-      <article class="card metric span-3"><div><div class="label">Equity</div><div class="value">{escape(_format_number(account.get('equity', 0)))}</div></div><div class="hint">Live equity including floating PnL</div></article>
-      <article class="card metric span-3"><div><div class="label">Profit</div><div class="value {_badge_class('PROFIT' if profit_value >= 0 else 'LOSS')}">{escape(_format_number(profit))}</div></div><div class="hint">Current account profit</div></article>
-      <article class="card metric span-3"><div><div class="label">Daily PnL</div><div class="value {_badge_class('PROFIT' if daily_pnl_value >= 0 else 'LOSS')}">{escape(_format_number(daily_pnl))}</div></div><div class="hint">Today’s realized bot PnL</div></article>
+  <div class="grid-3">
+    <div class="card"><h2>🎯 Quality Grades</h2><div class="mini-stats">{_mini_stat('A+:', quality.get('A+', 0), 'grade-a')}{_mini_stat('A:', quality.get('A', 0), 'grade-a')}{_mini_stat('B:', quality.get('B', 0), 'grade-b')}{_mini_stat('Blocked:', quality.get('blocked', 0), 'grade-d')}</div></div>
+    <div class="card"><h2>🔄 Adaptive</h2><div class="mini-stats">{_mini_stat('Base:', _pct(adaptive.get('base', 0.35)))}{_mini_stat('Now:', _pct(adaptive.get('current', 0.35)), 'neutral')}{_mini_stat('WR:', _pct(adaptive.get('recent_wr', 0)))}</div></div>
+    <div class="card"><h2>🔥 M30 & Streak</h2><div class="mini-stats">{_mini_stat('M30✓:', m30.get('confirm', 0), 'pnl-pos')}{_mini_stat('M30✗:', m30.get('against', 0), 'pnl-neg')}{_mini_stat('Streak:', str(streak.get('current_streak', 0)) + (' ⛔' if streak.get('in_cooldown') else ''), 'pnl-neg' if streak.get('in_cooldown') else '')}</div></div>
+  </div>
 
-      <article class="card span-8">
-        <h2>Open Positions ({len(open_positions)})</h2>
-        <div class="table-scroll"><table><thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Current</th><th>SL</th><th>PnL</th></tr></thead><tbody>{_render_positions()}</tbody></table></div>
-      </article>
-      <article class="card span-4">
-        <h2>Risk Guard</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('risk_guard'), 'Risk status has not been reported yet.')}</tbody></table></div>
-      </article>
+  <div class="card" style="margin-bottom:15px">
+    <h2>📈 Open Positions ({len(dashboard_state.get('open_positions') or [])})</h2>
+    <table><thead><tr><th>Ticket</th><th>Symbol</th><th>Side</th><th>Lots</th><th>Entry</th><th>Current</th><th>SL</th><th>TP</th><th>P/L</th></tr></thead><tbody>{_render_positions()}</tbody></table>
+  </div>
 
-      <article class="card span-6">
-        <h2>Signals</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('signals'), 'No signal data yet.')}</tbody></table></div>
-      </article>
-      <article class="card span-6">
-        <h2>Symbols</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('symbols'), 'No symbol data yet.')}</tbody></table></div>
-      </article>
+  <div class="grid-3">
+    <div class="card"><h2>🧠 Deep RL Agent</h2><div class="mini-stats">{_mini_stat('Arch:', rl.get('architecture', 'Dueling_DQN'), 'neutral')}{_mini_stat('Trades:', rl.get('total_trades', 0))}{_mini_stat('WR:', _pct(rl.get('win_rate', 0)), 'pnl-pos' if _as_float(rl.get('win_rate', 0)) >= .5 else '')}{_mini_stat('Steps:', rl.get('train_steps', 0))}{_mini_stat('Buffer:', rl.get('buffer_size', 0))}{_mini_stat('Loss:', _format_number(rl.get('avg_loss', 0), 4))}{_mini_stat('Q:', _format_number(rl.get('avg_q_value', 0), 3))}{_mini_stat('Reward:', _format_number(rl.get('total_reward', 0), 1), signed_class(rl.get('total_reward', 0)).replace('positive','pnl-pos').replace('negative','pnl-neg'))}</div></div>
+    <div class="card"><h2>🌍 Market Regimes</h2><div class="mini-stats">{_render_regimes()}</div></div>
+    <div class="card"><h2>🛡️ Risk Guard</h2><div class="mini-stats">{_mini_stat('Daily:', _money(daily_pnl), signed_class(daily_pnl).replace('positive','pnl-pos').replace('negative','pnl-neg'))}{_mini_stat('W:', risk.get('daily_wins', 0) if isinstance(risk, dict) else 0, 'pnl-pos')}{_mini_stat('L:', risk.get('daily_losses', 0) if isinstance(risk, dict) else 0, 'pnl-neg')}{_mini_stat('DD:', _pct(risk.get('drawdown_pct', 0) if isinstance(risk, dict) else 0, scale_unit_interval=False, decimals=1))}</div></div>
+  </div>
 
-      <article class="card span-4">
-        <h2>Performance</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table(dashboard_state.get('tracker_stats'), 'No closed-trade statistics yet.')}</tbody></table></div>
-      </article>
-      <article class="card span-4">
-        <h2>Quality / M30</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table({'quality': dashboard_state.get('quality_stats'), 'm30': dashboard_state.get('m30_stats')})}</tbody></table></div>
-      </article>
-      <article class="card span-4">
-        <h2>AI / Regime</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table({'rl': dashboard_state.get('rl_stats'), 'regime': dashboard_state.get('regime_stats')})}</tbody></table></div>
-      </article>
-
-      <article class="card span-6">
-        <h2>Adaptive Controls</h2>
-        <div class="table-scroll"><table><tbody>{_render_kv_table({'adaptive': dashboard_state.get('adaptive'), 'streak': dashboard_state.get('streak'), 'auto_adjust': dashboard_state.get('auto_adjust')})}</tbody></table></div>
-      </article>
-      <article class="card span-6">
-        <h2>Recent Logs</h2>
-        <ul>{log_rows}</ul>
-      </article>
-    </section>
-  </main>
+  <div class="card"><h2>📋 Live Log</h2><div class="log-box">{_render_logs()}</div></div>
+  <div class="footer">⚡ v7.1 dashboard style | Auto-refresh 5s | <a href="/api/state">API State</a> | <a href="/health">Health</a></div>
+  <div class="diagnostics" hidden>
+    <table><tbody>{_render_kv_table(dashboard_state.get('signals'), 'No signal data yet.')}</tbody></table>
+    <table><tbody>{_render_kv_table(dashboard_state.get('symbols'), 'No symbol data yet.')}</tbody></table>
+    <table><tbody>{_render_kv_table(dashboard_state.get('risk_guard'), 'Risk status has not been reported yet.')}</tbody></table>
+  </div>
 </body>
 </html>"""
-
 
 def start_dashboard(port: int | None = None, host: str = '0.0.0.0', open_browser: bool = True) -> ThreadingHTTPServer:
     """
