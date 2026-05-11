@@ -234,16 +234,13 @@ MAX_CURRENCY_EXPOSURE = 5
 # ============================================================
 # SPREAD
 # ============================================================
-MAX_SPREAD_MULTIPLIER = 3.0
+MAX_SPREAD_MULTIPLIER = 0.5
 SPREAD_AVG_PERIOD = 50
 MAX_SPREAD_POINTS = {
-    'EURUSDm': 25,
-    'GBPUSDm': 30,
-    'USDJPYm': 30,
+    'EURUSDm': 13,
+    'GBPUSDm': 15,
+    'USDJPYm': 15,
     'BTCUSDm': 1500,
-    # XAUUSDm is quoted with point=0.001 by this broker; 350 points = $0.350.
-    # Recent live ticks around 300 points are normal enough to evaluate, while
-    # the dynamic average multiplier still blocks sudden spread spikes.
     'XAUUSDm': 350,
 }
 DEFAULT_MAX_SPREAD_POINTS = 50
