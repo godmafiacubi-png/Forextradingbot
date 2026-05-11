@@ -92,11 +92,11 @@ CORRELATION_GROUPS = {
 MAX_SAME_DIRECTION_CORRELATED = 1
 
 SYMBOL_BEST_SESSIONS = {
-    'EURUSDm': ['LONDON', 'NY', 'OVERLAP'],
-    'GBPUSDm': ['LONDON', 'NY', 'OVERLAP'],
+    'EURUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP']
+    'GBPUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP']
     'USDJPYm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
     'BTCUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
-    'XAUUSDm': ['LONDON', 'NY', 'OVERLAP'],
+    'XAUUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP']
 }
 
 import MetaTrader5 as mt5
@@ -183,7 +183,7 @@ QUIET_MARKET_ADX_THRESHOLD = 25  # block trades when regime=QUIET and ADX below 
 # ============================================================
 # SESSION FILTER — True = เปิดกรอง / False = ปิดกรอง (เทรดได้ทุกเวลา)
 # ============================================================
-SESSION_FILTER_ENABLED = True
+SESSION_FILTER_ENABLED = False
 
 # ============================================================
 # M30 MULTI-TF
