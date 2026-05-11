@@ -332,33 +332,33 @@ def _render_html() -> str:
   <title>⚡ {escape(bot_version)} Dashboard</title>
   <style>
     * {{ margin:0; padding:0; box-sizing:border-box; }}
-    body {{ background:#050000; color:#e1e5ea; font-family:'Segoe UI', Consolas, monospace; font-size:14px; padding:15px; }}
-    .header {{ display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:linear-gradient(135deg,#1a0a0a,#2d0a0a); border:1px solid #5c1a1a; border-radius:10px; margin-bottom:15px; }}
+    body {{ background:#061a3a; color:#e1e5ea; font-family:'Segoe UI', Consolas, monospace; font-size:14px; padding:15px; }}
+    .header {{ display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:linear-gradient(135deg,#0b2a5b,#0f3d7a); border:1px solid #1e63b6; border-radius:10px; margin-bottom:15px; }}
     .header h1 {{ font-size:22px; background:linear-gradient(90deg,#ff4444,#ff8800); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
     .mode-badge,.execution-badge {{ display:inline-block; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:700; color:#fff; margin:2px 0 0 10px; }}
     .mode-badge {{ background:#d32f2f; }}
     .execution-badge {{ background:#00695c; }}
-    .header-info {{ color:#8a6a6a; font-size:12px; }}
+    .header-info {{ color:#9bbcff; font-size:12px; }}
     .status-badge {{ padding:8px 18px; border-radius:20px; font-weight:800; font-size:13px; text-transform:uppercase; }}
     .status-running {{ background:#ff6d00; color:#000; }} .status-stopped {{ background:#ff1744; color:#fff; }}
     .grid {{ display:grid; grid-template-columns:repeat(2,minmax(320px,1fr)); gap:15px; margin-bottom:15px; }}
     .grid-3 {{ display:grid; grid-template-columns:repeat(3,minmax(250px,1fr)); gap:15px; margin-bottom:15px; }}
-    .card {{ background:#1a0e0e; border:1px solid #3d1a1a; border-radius:10px; padding:18px; }}
-    .card h2 {{ font-size:14px; color:#ff8800; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; border-bottom:1px solid #3d1a1a; padding-bottom:8px; }}
+    .card {{ background:#0b2448; border:1px solid #1b4f93; border-radius:10px; padding:18px; }}
+    .card h2 {{ font-size:14px; color:#ff8800; text-transform:uppercase; letter-spacing:1px; margin-bottom:12px; border-bottom:1px solid #1b4f93; padding-bottom:8px; }}
     .account-grid,.stats-grid {{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }}
-    .account-item,.stat-item {{ background:#1f1212; border-radius:8px; padding:13px 10px; }}
-    .account-item {{ text-align:center; }} .account-label,.stat-label {{ font-size:11px; color:#8a6a6a; text-transform:uppercase; }}
+    .account-item,.stat-item {{ background:#102f5f; border-radius:8px; padding:13px 10px; }}
+    .account-item {{ text-align:center; }} .account-label,.stat-label {{ font-size:11px; color:#9bbcff; text-transform:uppercase; }}
     .account-value {{ font-size:22px; font-weight:800; margin-top:6px; }} .stat-value {{ font-size:16px; font-weight:800; margin-top:5px; }}
     .positive,.pnl-pos {{ color:#00e676; }} .negative,.pnl-neg {{ color:#ff1744; }} .neutral {{ color:#ff8800; }}
-    .mini-stats {{ display:flex; gap:10px; flex-wrap:wrap; }} .mini-stat {{ padding:8px 12px; background:#1f1212; border-radius:6px; font-size:12px; }}
-    .mini-stat .label {{ color:#8a6a6a; }} .mini-stat .value {{ font-weight:800; margin-left:4px; }}
-    table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding:10px; color:#ff8800; font-size:11px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #3d1a1a; }}
-    td {{ padding:10px; border-bottom:1px solid #1a0e0e; font-size:13px; }} tr:hover {{ background:#1f1212; }}
-    .signal-buy {{ color:#00e676; font-weight:800; }} .signal-sell {{ color:#ff1744; font-weight:800; }} .muted {{ color:#6b4a4a; }} .empty-row {{ text-align:center; padding:15px; }}
-    .log-box {{ max-height:300px; overflow-y:auto; font-family:Consolas, monospace; font-size:12px; background:#050000; padding:10px; border-radius:8px; }}
-    .log-line {{ padding:3px 0; border-bottom:1px solid #1a0e0e; }} .log-time {{ color:#6b4a4a; margin-right:6px; }}
+    .mini-stats {{ display:flex; gap:10px; flex-wrap:wrap; }} .mini-stat {{ padding:8px 12px; background:#102f5f; border-radius:6px; font-size:12px; }}
+    .mini-stat .label {{ color:#9bbcff; }} .mini-stat .value {{ font-weight:800; margin-left:4px; }}
+    table {{ width:100%; border-collapse:collapse; }} th {{ text-align:left; padding:10px; color:#ff8800; font-size:11px; text-transform:uppercase; letter-spacing:1px; border-bottom:1px solid #1b4f93; }}
+    td {{ padding:10px; border-bottom:1px solid #0b2448; font-size:13px; }} tr:hover {{ background:#102f5f; }}
+    .signal-buy {{ color:#00e676; font-weight:800; }} .signal-sell {{ color:#ff1744; font-weight:800; }} .muted {{ color:#6f95d8; }} .empty-row {{ text-align:center; padding:15px; }}
+    .log-box {{ max-height:300px; overflow-y:auto; font-family:Consolas, monospace; font-size:12px; background:#061a3a; padding:10px; border-radius:8px; }}
+    .log-line {{ padding:3px 0; border-bottom:1px solid #0b2448; }} .log-time {{ color:#6f95d8; margin-right:6px; }}
     .grade-a {{ color:#00e676; font-weight:800; }} .grade-b,.regime-ranging {{ color:#ffc107; font-weight:800; }} .grade-d,.regime-volatile {{ color:#ff1744; font-weight:800; }} .regime-trending {{ color:#00e676; font-weight:800; }} .regime-quiet {{ color:#7b8aa0; font-weight:800; }}
-    .footer {{ text-align:center; padding:10px; color:#5c3a3a; font-size:12px; }} .footer a {{ color:#8a6a6a; text-decoration:none; }}
+    .footer {{ text-align:center; padding:10px; color:#6f95d8; font-size:12px; }} .footer a {{ color:#9bbcff; text-decoration:none; }}
     @media (max-width:980px) {{ .grid,.grid-3 {{ grid-template-columns:1fr; }} .header {{ align-items:flex-start; gap:12px; flex-direction:column; }} }}
   </style>
 </head>

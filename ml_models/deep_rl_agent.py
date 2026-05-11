@@ -424,7 +424,11 @@ class DeepRLTradingAgent:
         self.train_step = 0
         self.total_frames = 0
 
-        self.device = torch.device('cuda' if TORCH_AVAILABLE and torch.cuda.is_available() else 'cpu')
+        self.device = (
+            torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            if TORCH_AVAILABLE
+            else 'cpu'
+        )
 
         if TORCH_AVAILABLE:
             self.policy_net = DuelingDQN(self.STATE_SIZE, self.ACTION_SIZE, hidden).to(self.device)

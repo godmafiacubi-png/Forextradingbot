@@ -275,8 +275,10 @@ class DeepRLTradingAgent:
         self.total_frames = 0
         self.use_cross_symbol = use_cross_symbol
 
-        self.device = torch.device(
-            "cuda" if TORCH_AVAILABLE and torch.cuda.is_available() else "cpu"
+        self.device = (
+            torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            if TORCH_AVAILABLE
+            else "cpu"
         )
 
         if TORCH_AVAILABLE and _LEGACY_IMPORTS_OK:
