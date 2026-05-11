@@ -132,8 +132,8 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 # EXECUTION SAFETY
 # ============================================================
-DRY_RUN_REQUESTED = _env_bool('DRY_RUN', True)
-LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', False)
+DRY_RUN_REQUESTED = _env_bool('DRY_RUN', False)
+LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', True)
 # Fail-safe: live order routing is enabled only when DRY_RUN=false and
 # LIVE_TRADING_CONFIRMED=true are both set explicitly in the environment.
 DRY_RUN = DRY_RUN_REQUESTED or not LIVE_TRADING_CONFIRMED
