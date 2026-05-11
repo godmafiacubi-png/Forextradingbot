@@ -817,7 +817,9 @@ class TradingBot:
 
             logger.info(f"")
             logger.info(f"  ┌─── {symbol} [R:{sym_risk}% SL:{sl_mult}x TP:{tp_mult}x {m30_tag}]")
-            logger.info(f"  │ Price: {price:.5f}  ATR: {atr:.5f}  Spread: {cur_spread:.1f}(avg:{avg_spread:.1f})  Sess: {session_str}")
+            max_spread = MAX_SPREAD_POINTS.get(symbol, DEFAULT_MAX_SPREAD_POINTS)
+            cap_tag = f" cap:{max_spread:.1f}" if max_spread is not None else " cap:OFF"
+            logger.info(f"  │ Price: {price:.5f}  ATR: {atr:.5f}  Spread: {cur_spread:.1f}(avg:{avg_spread:.1f}{cap_tag})  Sess: {session_str}")
             logger.info(f"  │ DistSup: {dist_to_support:.1f}ATR  DistRes: {dist_to_resist:.1f}ATR  SwL: {swing_low:.5f}  SwH: {swing_high:.5f}")
             logger.info(f"  │ H1: {h1_trend}  H4: {htf_str}  RSI={rsi:.1f}  ADX={adx:.1f}  ML: {ml_prob:.4f}")
             logger.info(f"  │ DeepRL: {rl_name} | Regime: {regime_name} | {meta_tag} | Temporal: {'Y' if hub_result.temporal_enriched else 'N'} | Src: {rl_src}")
@@ -844,8 +846,8 @@ class TradingBot:
                 blocked = "HOLD"
             elif not spread_ok:
                 max_spread = MAX_SPREAD_POINTS.get(symbol, DEFAULT_MAX_SPREAD_POINTS)
-                if avg_spread <= 0 and max_spread is not None:
-                    blocked = f"Spread {cur_spread:.1f} > cap {max_spread:.1f}"
+                if max_spread is not None and cur_spread > max_spread:
+                    blocked = f"Spread {cur_spread:.1f} > cap {max_spread:.1f} (avg:{avg_spread:.1f})"
                 else:
                     blocked = f"Spread {cur_spread:.1f} > {avg_spread*MAX_SPREAD_MULTIPLIER:.1f} (avg:{avg_spread:.1f})"
             elif not hub_result.meta_trade:

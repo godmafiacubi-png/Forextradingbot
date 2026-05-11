@@ -203,36 +203,29 @@ class RiskGuard:
             if current_spread <= 0:
                 return False, current_spread, 0
 
-            max_spread_points = self.cfg.get('MAX_SPREAD_POINTS', {}).get(
-                symbol, self.cfg.get('DEFAULT_MAX_SPREAD_POINTS')
-            )
-            if max_spread_points is not None and current_spread > max_spread_points:
-                return False, current_spread, 0
-            ask = si.get('ask', 0)
-            bid = si.get('bid', 0)
-            if ask > 0 and bid > 0:
-                current_spread_price = ask - bid
-            else:
-                current_spread_price = 0
-
-            # Track spread history
+            # Track every valid spread sample before applying filters.  This keeps
+            # dashboard/log averages meaningful even when the first observed tick is
+            # wider than the absolute cap (previously avg=0 made spread issues hard
+            # to diagnose, especially on XAUUSDm).
             self.spread_history[symbol].append(current_spread)
             spread_period = self.cfg.get('SPREAD_AVG_PERIOD', 50)
             if len(self.spread_history[symbol]) > spread_period:
                 self.spread_history[symbol] = self.spread_history[symbol][-spread_period:]
 
-            # Calculate average
             history = self.spread_history[symbol]
-            if len(history) < 5:
-                return True, current_spread, current_spread
+            avg_spread = sum(history) / len(history) if history else 0
 
-            avg_spread = sum(history) / len(history)
-
-            max_mult = self.cfg.get('MAX_SPREAD_MULTIPLIER', 3.0)
-            if avg_spread > 0 and current_spread > avg_spread * max_mult:
+            max_spread_points = self.cfg.get('MAX_SPREAD_POINTS', {}).get(
+                symbol, self.cfg.get('DEFAULT_MAX_SPREAD_POINTS')
+            )
+            if max_spread_points is not None and current_spread > max_spread_points:
                 return False, current_spread, avg_spread
 
-            return True, current_spread, avg_spread
+            max_mult = self.cfg.get('MAX_SPREAD_MULTIPLIER', 3.0)
+            if len(history) >= 5 and avg_spread > 0 and current_spread > avg_spread * max_mult:
+                return False, current_spread, avg_spread
+
+            return True, current_spread, avg_spread or current_spread
 
         except Exception as e:
             logger.debug(f"Spread check error: {e}")
