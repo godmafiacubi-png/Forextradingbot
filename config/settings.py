@@ -92,11 +92,11 @@ CORRELATION_GROUPS = {
 MAX_SAME_DIRECTION_CORRELATED = 1
 
 SYMBOL_BEST_SESSIONS = {
-    'EURUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP']
-    'GBPUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP']
+    'EURUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
+    'GBPUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
     'USDJPYm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
     'BTCUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
-    'XAUUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP']
+    'XAUUSDm': ['ASIAN', 'LONDON', 'NY', 'OVERLAP'],
 }
 
 import MetaTrader5 as mt5
