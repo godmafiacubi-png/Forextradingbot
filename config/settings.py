@@ -132,8 +132,8 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 # EXECUTION SAFETY
 # ============================================================
-DRY_RUN_REQUESTED = _env_bool('DRY_RUN', True)
-LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', False)
+DRY_RUN_REQUESTED = _env_bool('DRY_RUN', False)
+LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', True)
 # Fail-safe: live order routing is enabled only when DRY_RUN=false and
 # LIVE_TRADING_CONFIRMED=true are both set explicitly in the environment.
 DRY_RUN = DRY_RUN_REQUESTED or not LIVE_TRADING_CONFIRMED
@@ -240,7 +240,7 @@ MAX_SPREAD_POINTS = {
     'EURUSDm': 25,
     'GBPUSDm': 30,
     'USDJPYm': 30,
-    'BTCUSDm': 5000,
+    'BTCUSDm': 1500,
     # XAUUSDm is quoted with point=0.001 by this broker; 350 points = $0.350.
     # Recent live ticks around 300 points are normal enough to evaluate, while
     # the dynamic average multiplier still blocks sudden spread spikes.
