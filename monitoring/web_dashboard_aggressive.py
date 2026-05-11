@@ -1,10 +1,11 @@
 """
-Web Dashboard v7.1 — AGGRESSIVE Edition
+ForexTradingBot V8.0 Web Dashboard — AGGRESSIVE Edition
 สี: แดง/ส้ม | High Risk High Reward | Deep RL Support
 """
 
 import threading
 import logging
+import os
 import json
 import webbrowser
 import time as _time
@@ -13,6 +14,10 @@ from datetime import datetime
 from flask import Flask, render_template_string
 
 logger = logging.getLogger(__name__)
+
+APP_NAME = 'ForexTradingBot'
+DEFAULT_BOT_VERSION = os.getenv('BOT_VERSION', 'V8.0').upper()
+DEFAULT_EXECUTION_MODE = 'Dryruns'
 
 dashboard_state = {
     'account': {'balance': 0, 'equity': 0, 'margin': 0, 'free_margin': 0, 'profit': 0, 'growth_pct': 0},
@@ -37,6 +42,8 @@ dashboard_state = {
     'daily_pnl': 0,
     'dashboard_port': 5001,
     'mode': 'AGGRESSIVE',
+    'bot_version': f'{APP_NAME} {DEFAULT_BOT_VERSION}',
+    'execution_mode': DEFAULT_EXECUTION_MODE,
 }
 
 
@@ -60,7 +67,7 @@ HTML_TEMPLATE = """
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>⚡ AGGRESSIVE Bot — Port {{ port }}</title>
+<title>⚡ {{ state.bot_version }} — Port {{ port }}</title>
 <meta http-equiv="refresh" content="5">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -87,16 +94,17 @@ body {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
-.mode-badge {
+.mode-badge, .execution-badge {
     padding: 4px 12px;
     border-radius: 12px;
     font-size: 11px;
     font-weight: bold;
-    background: #d32f2f;
     color: #fff;
     margin-left: 10px;
     animation: pulse 2s infinite;
 }
+.mode-badge { background: #d32f2f; }
+.execution-badge { background: #00695c; }
 @keyframes pulse {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
@@ -188,8 +196,9 @@ tr:hover { background: #1f1212; }
 <!-- HEADER -->
 <div class="header">
     <div>
-        <h1>⚡ Trading Bot v7.1</h1>
-        <span class="mode-badge">AGGRESSIVE</span>
+        <h1>⚡ {{ state.bot_version }}</h1>
+        <span class="mode-badge">{{ state.mode }}</span>
+        <span class="execution-badge">{{ state.execution_mode }}</span>
         <div class="header-info">
             Port: {{ port }} | Iter #{{ state.iteration }} | {{ state.last_update }}
             | Daily: ${{ "%.2f"|format(state.daily_pnl) }}
@@ -374,7 +383,7 @@ tr:hover { background: #1f1212; }
     </div>
 </div>
 
-<div class="footer">⚡ Aggressive v7.1 + Deep RL | Compounding ON | Auto-refresh 5s | Port {{ port }}</div>
+<div class="footer">⚡ {{ state.bot_version }} Aggressive + Deep RL | Compounding ON | Auto-refresh 5s | Port {{ port }}</div>
 </body>
 </html>
 """
