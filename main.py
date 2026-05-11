@@ -264,6 +264,8 @@ class TradingBot:
             update_dashboard('bot_status', 'RUNNING')
             update_dashboard('dashboard_port', DASHBOARD_PORT)
             update_dashboard('mode', BOT_MODE)
+            update_dashboard('bot_version', f'ForexTradingBot {BOT_VERSION}')
+            update_dashboard('execution_mode', 'Dryruns' if DRY_RUN else 'Livetrade')
 
             self.htf_trend = {}
             self.active_trades = {}

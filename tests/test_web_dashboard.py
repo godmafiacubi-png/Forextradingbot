@@ -8,6 +8,8 @@ def test_default_dashboard_imports_without_flask(monkeypatch):
     module = importlib.import_module("monitoring.web_dashboard")
 
     assert module.dashboard_state["mode"] == "DEFAULT"
+    assert module.dashboard_state["bot_version"] == "ForexTradingBot V8.0"
+    assert module.dashboard_state["execution_mode"] == "Dryruns"
     assert callable(module.update_dashboard)
     assert callable(module.add_log)
     assert callable(module.start_dashboard)
@@ -66,6 +68,8 @@ def test_default_dashboard_renders_improved_sections_and_json_api():
         web_dashboard._server_thread = None
 
     assert "Trading Bot Dashboard" in html
+    assert "ForexTradingBot V8.0" in html
+    assert "Dryruns" in html
     assert "Open Positions (1)" in html
     assert "Risk Guard" in html
     assert "API State" in html

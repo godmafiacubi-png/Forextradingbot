@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import webbrowser
 from datetime import datetime
@@ -21,6 +22,10 @@ from typing import Any
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
+
+APP_NAME = 'ForexTradingBot'
+DEFAULT_BOT_VERSION = os.getenv('BOT_VERSION', 'V8.0').upper()
+DEFAULT_EXECUTION_MODE = 'Dryruns'
 
 
 dashboard_state: dict[str, Any] = {
@@ -46,6 +51,8 @@ dashboard_state: dict[str, Any] = {
     'daily_pnl': 0,
     'dashboard_port': 5001,
     'mode': 'DEFAULT',
+    'bot_version': f'{APP_NAME} {DEFAULT_BOT_VERSION}',
+    'execution_mode': DEFAULT_EXECUTION_MODE,
 }
 
 _server: ThreadingHTTPServer | None = None
@@ -302,6 +309,8 @@ def _render_html() -> str:
     streak = dashboard_state.get('streak') or {}
     rl = dashboard_state.get('rl_stats') or {}
     status = str(dashboard_state.get('bot_status', 'STOPPED'))
+    bot_version = str(dashboard_state.get('bot_version') or f'{APP_NAME} {DEFAULT_BOT_VERSION}')
+    execution_mode = str(dashboard_state.get('execution_mode') or DEFAULT_EXECUTION_MODE)
 
     profit = account.get('profit', 0)
     growth = account.get('growth_pct', 0)
@@ -320,13 +329,15 @@ def _render_html() -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="5">
-  <title>⚡ Trading Bot v7.1 Dashboard</title>
+  <title>⚡ {escape(bot_version)} Dashboard</title>
   <style>
     * {{ margin:0; padding:0; box-sizing:border-box; }}
     body {{ background:#050000; color:#e1e5ea; font-family:'Segoe UI', Consolas, monospace; font-size:14px; padding:15px; }}
     .header {{ display:flex; justify-content:space-between; align-items:center; padding:15px 20px; background:linear-gradient(135deg,#1a0a0a,#2d0a0a); border:1px solid #5c1a1a; border-radius:10px; margin-bottom:15px; }}
     .header h1 {{ font-size:22px; background:linear-gradient(90deg,#ff4444,#ff8800); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }}
-    .mode-badge {{ display:inline-block; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:700; background:#d32f2f; color:#fff; margin:2px 0 0 10px; }}
+    .mode-badge,.execution-badge {{ display:inline-block; padding:4px 12px; border-radius:12px; font-size:11px; font-weight:700; color:#fff; margin:2px 0 0 10px; }}
+    .mode-badge {{ background:#d32f2f; }}
+    .execution-badge {{ background:#00695c; }}
     .header-info {{ color:#8a6a6a; font-size:12px; }}
     .status-badge {{ padding:8px 18px; border-radius:20px; font-weight:800; font-size:13px; text-transform:uppercase; }}
     .status-running {{ background:#ff6d00; color:#000; }} .status-stopped {{ background:#ff1744; color:#fff; }}
@@ -354,9 +365,10 @@ def _render_html() -> str:
 <body>
   <div class="header">
     <div>
-      <h1>⚡ Trading Bot v7.1</h1>
+      <h1>⚡ {escape(bot_version)}</h1>
       <span class="mode-badge">{escape(str(dashboard_state.get('mode', 'DEFAULT'))).upper()}</span>
-      <div class="header-info">Trading Bot Dashboard · Port: {escape(str(dashboard_state.get('dashboard_port', 5001)))} | Iter #{escape(str(dashboard_state.get('iteration', 0)))} | {escape(str(dashboard_state.get('last_update') or 'waiting for data'))} | Daily: {escape(_money(dashboard_state.get('daily_pnl', 0)))} | Compounding: ON</div>
+      <span class="execution-badge">{escape(execution_mode)}</span>
+      <div class="header-info">ForexTradingBot Trading Bot Dashboard · Port: {escape(str(dashboard_state.get('dashboard_port', 5001)))} | Iter #{escape(str(dashboard_state.get('iteration', 0)))} | {escape(str(dashboard_state.get('last_update') or 'waiting for data'))} | Daily: {escape(_money(dashboard_state.get('daily_pnl', 0)))} | Compounding: ON</div>
     </div>
     <span class="status-badge {'status-running' if status == 'RUNNING' else 'status-stopped'}">{escape(status)}</span>
   </div>
@@ -400,7 +412,7 @@ def _render_html() -> str:
   </div>
 
   <div class="card"><h2>📋 Live Log</h2><div class="log-box">{_render_logs()}</div></div>
-  <div class="footer">⚡ v7.1 dashboard style | Auto-refresh 5s | <a href="/api/state">API State</a> | <a href="/health">Health</a></div>
+  <div class="footer">⚡ {escape(bot_version)} dashboard style | Auto-refresh 5s | <a href="/api/state">API State</a> | <a href="/health">Health</a></div>
   <div class="diagnostics" hidden>
     <table><tbody>{_render_kv_table(dashboard_state.get('signals'), 'No signal data yet.')}</tbody></table>
     <table><tbody>{_render_kv_table(dashboard_state.get('symbols'), 'No symbol data yet.')}</tbody></table>
