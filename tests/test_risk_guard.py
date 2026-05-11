@@ -62,4 +62,31 @@ def test_spread_filter_blocks_absolute_symbol_cap(monkeypatch):
 
     assert ok is False
     assert spread == 31
-    assert avg == 0
+    assert avg == 31
+
+
+def test_spread_filter_tracks_average_before_absolute_cap(monkeypatch):
+    module = _load_risk_guard(monkeypatch)
+    connector = _Connector(spread=20)
+    guard = module.RiskGuard(
+        connector,
+        {
+            "MAX_SPREAD_POINTS": {"XAUUSDm": 30},
+            "DEFAULT_MAX_SPREAD_POINTS": 50,
+            "SPREAD_AVG_PERIOD": 50,
+            "MAX_SPREAD_MULTIPLIER": 3.0,
+        },
+    )
+
+    for spread in (20, 22, 24, 26):
+        connector.spread = spread
+        ok, _, _ = guard.check_spread("XAUUSDm")
+        assert ok is True
+
+    connector.spread = 40
+    ok, spread, avg = guard.check_spread("XAUUSDm")
+
+    assert ok is False
+    assert spread == 40
+    assert avg == 26.4
+    assert guard.spread_history["XAUUSDm"] == [20, 22, 24, 26, 40]

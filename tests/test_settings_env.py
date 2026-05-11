@@ -96,3 +96,10 @@ def test_symbol_settings_cover_all_configured_symbols(monkeypatch):
         assert 0 < cfg["ml_sell_threshold"] < cfg["ml_buy_threshold"] < 1
         assert 0 < cfg["min_confidence"] < 1
         assert cfg["max_per_symbol"] == 1
+
+
+def test_xauusd_spread_cap_matches_broker_points(monkeypatch):
+    settings = _load_settings(monkeypatch)
+
+    assert settings.SYMBOL_POINTS["XAUUSDm"] == 0.001
+    assert settings.MAX_SPREAD_POINTS["XAUUSDm"] >= 300
