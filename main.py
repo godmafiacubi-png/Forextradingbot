@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 
 import MetaTrader5 as mt5
 from config.settings import *
+from risk_management.regime_exit import REGIME_EXIT_POLICIES, get_regime_exit_policy
 from data_layer.mt5_connector import MT5Connector
 from feature_engineering.ict_features import ICTFeatures
 from feature_engineering.ml_features import MLFeatures
@@ -793,6 +794,16 @@ class TradingBot:
             adj_conf *= news_mult
             signal = adj_sig
             confidence = adj_conf
+            exit_policy = get_regime_exit_policy(
+                regime_name,
+                sl_mult,
+                tp_mult,
+                base_breakeven_atr=BREAKEVEN_ATR,
+                policies=sym_cfg.get('regime_exit_policies', REGIME_EXIT_POLICIES),
+                confidence=confidence,
+            )
+            sl_mult = exit_policy['sl_atr_mult']
+            tp_mult = exit_policy['tp_atr_mult']
             signal_name = "BUY" if signal == 1 else ("SELL" if signal == -1 else "HOLD")
 
             perf_adj = self.perf_adjuster.get_adjustments()
@@ -820,7 +831,7 @@ class TradingBot:
 
             risk_pct, max_trades = self.risk_guard.get_risk_adjusted_params()
             effective_risk = min(risk_pct, sym_risk) if self.risk_guard.recovery_mode else sym_risk
-            risk_mult = perf_adj.get('risk_mult', 1.0)
+            risk_mult = perf_adj.get('risk_mult', 1.0) * exit_policy.get('risk_mult', 1.0)
             effective_risk *= risk_mult
             self.order_manager.set_limits(max_trades)
             self.position_sizer.account_risk = effective_risk
@@ -992,6 +1003,8 @@ class TradingBot:
                     'sl': sl, 'tp': tp, 'lots': lot, 'confidence': confidence,
                     'time': datetime.now(), 'quality': quality_score, 'grade': quality_grade,
                     'regime': regime_name,
+                    'exit_policy': exit_policy,
+                    'risk_mult': exit_policy.get('risk_mult', 1.0),
                 }
                 self.tracker.log_trade(ticket, symbol, signal_name, price, lot)
                 self.hub.on_trade_open(symbol, action=rl_act,

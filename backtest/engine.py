@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from collections import defaultdict
 
+from risk_management.regime_exit import REGIME_EXIT_POLICIES, get_regime_exit_policy
+
 logger = logging.getLogger(__name__)
 
 CONTRACT_SPECS = {
@@ -24,7 +26,8 @@ def get_contract_spec(symbol):
 
 class BacktestTrade:
     def __init__(self, ticket, symbol, side, entry_price, volume, sl, tp,
-                 entry_time, entry_bar, confidence=0, atr=0):
+                 entry_time, entry_bar, confidence=0, atr=0, regime='GLOBAL',
+                 exit_policy=None):
         self.ticket = ticket
         self.symbol = symbol
         self.side = side
@@ -36,6 +39,8 @@ class BacktestTrade:
         self.entry_bar = entry_bar
         self.confidence = confidence
         self.atr = atr
+        self.regime = regime
+        self.exit_policy = exit_policy or {}
         self.exit_price = None
         self.exit_time = None
         self.exit_bar = None
@@ -81,6 +86,10 @@ class BacktestTrade:
             'max_favorable': round(self.max_favorable, 5),
             'max_adverse': round(self.max_adverse, 5),
             'duration_bars': self.duration_bars,
+            'regime': self.regime,
+            'sl_atr_mult': round(float(self.exit_policy.get('sl_atr_mult', 0)), 4),
+            'tp_atr_mult': round(float(self.exit_policy.get('tp_atr_mult', 0)), 4),
+            'risk_mult': round(float(self.exit_policy.get('risk_mult', 1.0)), 4),
         }
 
 
@@ -99,6 +108,7 @@ class BacktestEngine:
         self.risk_pct = config.get('risk_pct', 2.0)
         self.sl_atr_mult = config.get('sl_atr_mult', 1.5)
         self.tp_atr_mult = config.get('tp_atr_mult', 2.5)
+        self.regime_exit_policies = config.get('regime_exit_policies', REGIME_EXIT_POLICIES)
         self.max_trades = config.get('max_trades', 5)
         self.max_per_symbol = config.get('max_per_symbol', 2)
 
@@ -165,11 +175,12 @@ class BacktestEngine:
         t = np.clip((confidence - 0.3) / 0.5, 0, 1)
         return self.conf_scale_min + t * (self.conf_scale_max - self.conf_scale_min)
 
-    def calculate_lot_size(self, symbol, entry_price, sl_price, confidence=0.5):
+    def calculate_lot_size(self, symbol, entry_price, sl_price, confidence=0.5, risk_mult=1.0):
         pip_size, pip_value_per_lot, _ = get_contract_spec(symbol)
 
         base = self._get_sizing_base()
         risk_amount = base * (self.risk_pct / 100)
+        risk_amount *= float(np.clip(risk_mult, 0.0, 1.0))
 
         # Confidence scaling
         conf_mult = self._get_conf_multiplier(confidence)
@@ -332,6 +343,7 @@ class BacktestEngine:
             adx = float(bar.get('adx', 0))
             rsi = float(bar.get('rsi', 50))
             ict_score = int(bar.get('ict_score', 0))
+            regime = bar.get('regime', bar.get('market_regime', bar.get('htf_regime', 'GLOBAL')))
 
             if signal == 0: continue
             if ict_score < self.min_ict_score:
@@ -383,22 +395,35 @@ class BacktestEngine:
                 if confidence < self.min_confidence:
                     self.trades_blocked['m30_conf'] += 1; continue
 
-            # SL/TP
+            # SL/TP — adapt ATR multipliers and risk by market regime
+            exit_policy = get_regime_exit_policy(
+                regime,
+                self.sl_atr_mult,
+                self.tp_atr_mult,
+                base_breakeven_atr=self.breakeven_atr,
+                base_partial_stages=self.partial_stages,
+                base_trail_stages=self.trail_stages,
+                policies=self.regime_exit_policies,
+                confidence=confidence,
+            )
+            sl_mult = exit_policy['sl_atr_mult']
+            tp_mult = exit_policy['tp_atr_mult']
+
             spread_cost = self.spread_pips * pip_size + self.slippage_pips * pip_size
             if signal == 1:
                 entry = price + spread_cost / 2
-                sl = entry - atr * self.sl_atr_mult
-                tp = entry + atr * self.tp_atr_mult
+                sl = entry - atr * sl_mult
+                tp = entry + atr * tp_mult
             else:
                 entry = price - spread_cost / 2
-                sl = entry + atr * self.sl_atr_mult
-                tp = entry - atr * self.tp_atr_mult
+                sl = entry + atr * sl_mult
+                tp = entry - atr * tp_mult
 
             if signal == 1 and (sl >= entry or tp <= entry): continue
             if signal == -1 and (sl <= entry or tp >= entry): continue
 
             # ⚡ Calculate lot with confidence scaling + max_lot cap
-            volume = self.calculate_lot_size(symbol, entry, sl, confidence)
+            volume = self.calculate_lot_size(symbol, entry, sl, confidence, exit_policy.get('risk_mult', 1.0))
             self.balance -= self.commission_per_lot * volume * 2
 
             self.trade_counter += 1
@@ -406,10 +431,11 @@ class BacktestEngine:
                 self.trade_counter, symbol,
                 'BUY' if signal == 1 else 'SELL',
                 entry, volume, sl, tp,
-                bar_time, i, confidence, atr
+                bar_time, i, confidence, atr,
+                regime=exit_policy['regime'], exit_policy=exit_policy
             )
             self.open_trades.append(trade)
-            self.partial_done[trade.ticket] = [False] * len(self.partial_stages)
+            self.partial_done[trade.ticket] = [False] * len(exit_policy.get('partial_stages') or self.partial_stages)
             self.last_entry_bar[side_key] = i
 
         # Close remaining
@@ -466,7 +492,8 @@ class BacktestEngine:
 
             if self.partial_enabled and trade.ticket in self.partial_done:
                 stages = self.partial_done[trade.ticket]
-                for s_idx, (atr_level, close_pct) in enumerate(self.partial_stages):
+                partial_stages = trade.exit_policy.get('partial_stages') or self.partial_stages
+                for s_idx, (atr_level, close_pct) in enumerate(partial_stages):
                     if profit_in_atr >= atr_level and not stages[s_idx]:
                         close_vol = trade.volume * close_pct
                         pips = profit_dist / pip_size
@@ -485,21 +512,25 @@ class BacktestEngine:
 
             new_sl = None
             if trade.side == 'BUY':
-                for atr_level, trail_dist in self.trail_stages:
+                trail_stages = trade.exit_policy.get('trail_stages') or self.trail_stages
+                for atr_level, trail_dist in trail_stages:
                     if profit_in_atr >= atr_level:
                         potential = current_price - t_atr * trail_dist
                         if potential > trade.sl: new_sl = potential
                         break
-                if new_sl is None and profit_in_atr >= self.breakeven_atr:
+                breakeven_atr = trade.exit_policy.get('breakeven_atr', self.breakeven_atr)
+                if new_sl is None and profit_in_atr >= breakeven_atr:
                     be = trade.entry_price + t_atr * 0.1
                     if be > trade.sl: new_sl = be
             else:
-                for atr_level, trail_dist in self.trail_stages:
+                trail_stages = trade.exit_policy.get('trail_stages') or self.trail_stages
+                for atr_level, trail_dist in trail_stages:
                     if profit_in_atr >= atr_level:
                         potential = current_price + t_atr * trail_dist
                         if potential < trade.sl: new_sl = potential
                         break
-                if new_sl is None and profit_in_atr >= self.breakeven_atr:
+                breakeven_atr = trade.exit_policy.get('breakeven_atr', self.breakeven_atr)
+                if new_sl is None and profit_in_atr >= breakeven_atr:
                     be = trade.entry_price - t_atr * 0.1
                     if be < trade.sl: new_sl = be
 
