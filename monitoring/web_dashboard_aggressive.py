@@ -72,7 +72,7 @@ HTML_TEMPLATE = """
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    background: #050000;
+    background: #061a3a;
     color: #e1e5ea;
     font-family: 'Segoe UI', Consolas, monospace;
     font-size: 14px;
@@ -83,10 +83,10 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 15px 20px;
-    background: linear-gradient(135deg, #1a0a0a, #2d0a0a);
+    background: linear-gradient(135deg, #0b2a5b, #0f3d7a);
     border-radius: 10px;
     margin-bottom: 15px;
-    border: 1px solid #5c1a1a;
+    border: 1px solid #1e63b6;
 }
 .header h1 {
     font-size: 22px;
@@ -109,7 +109,7 @@ body {
     0%, 100% { opacity: 1; }
     50% { opacity: 0.7; }
 }
-.header-info { color: #8a6a6a; font-size: 12px; }
+.header-info { color: #9bbcff; font-size: 12px; }
 .status-badge {
     padding: 6px 16px;
     border-radius: 20px;
@@ -123,10 +123,10 @@ body {
 .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; margin-bottom: 15px; }
 
 .card {
-    background: #1a0e0e;
+    background: #0b2448;
     border-radius: 10px;
     padding: 18px;
-    border: 1px solid #3d1a1a;
+    border: 1px solid #1b4f93;
 }
 .card h2 {
     font-size: 14px;
@@ -134,36 +134,36 @@ body {
     text-transform: uppercase;
     letter-spacing: 1px;
     margin-bottom: 12px;
-    border-bottom: 1px solid #3d1a1a;
+    border-bottom: 1px solid #1b4f93;
     padding-bottom: 8px;
 }
 
 .account-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.account-item { text-align: center; padding: 10px; background: #1f1212; border-radius: 8px; }
-.account-label { font-size: 11px; color: #8a6a6a; text-transform: uppercase; }
+.account-item { text-align: center; padding: 10px; background: #102f5f; border-radius: 8px; }
+.account-label { font-size: 11px; color: #9bbcff; text-transform: uppercase; }
 .account-value { font-size: 22px; font-weight: bold; margin-top: 4px; }
 .positive { color: #00e676; }
 .negative { color: #ff1744; }
 .neutral { color: #ff8800; }
 
 .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.stat-item { padding: 8px; background: #1f1212; border-radius: 6px; }
-.stat-label { font-size: 11px; color: #8a6a6a; }
+.stat-item { padding: 8px; background: #102f5f; border-radius: 6px; }
+.stat-label { font-size: 11px; color: #9bbcff; }
 .stat-value { font-size: 16px; font-weight: bold; margin-top: 2px; }
 
 .mini-stats { display: flex; gap: 10px; flex-wrap: wrap; }
-.mini-stat { padding: 6px 12px; background: #1f1212; border-radius: 6px; font-size: 12px; }
-.mini-stat .label { color: #8a6a6a; }
+.mini-stat { padding: 6px 12px; background: #102f5f; border-radius: 6px; font-size: 12px; }
+.mini-stat .label { color: #9bbcff; }
 .mini-stat .value { font-weight: bold; margin-left: 4px; }
 
 table { width: 100%; border-collapse: collapse; }
 th {
     text-align: left; padding: 8px 10px; color: #ff8800;
     font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
-    border-bottom: 1px solid #3d1a1a;
+    border-bottom: 1px solid #1b4f93;
 }
-td { padding: 8px 10px; border-bottom: 1px solid #1a0e0e; font-size: 13px; }
-tr:hover { background: #1f1212; }
+td { padding: 8px 10px; border-bottom: 1px solid #0b2448; font-size: 13px; }
+tr:hover { background: #102f5f; }
 
 .signal-buy { color: #00e676; font-weight: bold; }
 .signal-sell { color: #ff1744; font-weight: bold; }
@@ -173,10 +173,10 @@ tr:hover { background: #1f1212; }
 .log-box {
     max-height: 300px; overflow-y: auto;
     font-family: Consolas, monospace; font-size: 12px;
-    background: #050000; padding: 10px; border-radius: 8px;
+    background: #061a3a; padding: 10px; border-radius: 8px;
 }
-.log-line { padding: 2px 0; border-bottom: 1px solid #1a0e0e; }
-.log-time { color: #6b4a4a; }
+.log-line { padding: 2px 0; border-bottom: 1px solid #0b2448; }
+.log-time { color: #6f95d8; }
 
 .grade-a { color: #00e676; font-weight: bold; }
 .grade-b { color: #ffc107; font-weight: bold; }
@@ -188,7 +188,7 @@ tr:hover { background: #1f1212; }
 .regime-volatile { color: #ff1744; font-weight: bold; }
 .regime-quiet { color: #7b8aa0; }
 
-.footer { text-align: center; padding: 10px; color: #5c3a3a; font-size: 12px; }
+.footer { text-align: center; padding: 10px; color: #6f95d8; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -267,7 +267,7 @@ tr:hover { background: #1f1212; }
     {% else %}
     <div class="card">
         <h2>📊 Performance</h2>
-        <p style="color:#6b4a4a;text-align:center;padding:20px">Waiting for trades...</p>
+        <p style="color:#6f95d8;text-align:center;padding:20px">Waiting for trades...</p>
     </div>
     {% endif %}
 </div>
@@ -326,7 +326,7 @@ tr:hover { background: #1f1212; }
         </tbody>
     </table>
     {% else %}
-    <p style="color:#6b4a4a;text-align:center;padding:15px">No open positions</p>
+    <p style="color:#6f95d8;text-align:center;padding:15px">No open positions</p>
     {% endif %}
 </div>
 
