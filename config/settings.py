@@ -234,7 +234,7 @@ MAX_CURRENCY_EXPOSURE = 5
 # ============================================================
 # SPREAD
 # ============================================================
-MAX_SPREAD_MULTIPLIER = 0.5
+MAX_SPREAD_MULTIPLIER = 1.5
 SPREAD_AVG_PERIOD = 50
 MAX_SPREAD_POINTS = {
     'EURUSDm': 13,
