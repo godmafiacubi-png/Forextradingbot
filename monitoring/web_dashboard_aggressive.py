@@ -65,7 +65,7 @@ HTML_TEMPLATE = """
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    background: #120808;
+    background: #050000;
     color: #e1e5ea;
     font-family: 'Segoe UI', Consolas, monospace;
     font-size: 14px;
@@ -165,7 +165,7 @@ tr:hover { background: #1f1212; }
 .log-box {
     max-height: 300px; overflow-y: auto;
     font-family: Consolas, monospace; font-size: 12px;
-    background: #120808; padding: 10px; border-radius: 8px;
+    background: #050000; padding: 10px; border-radius: 8px;
 }
 .log-line { padding: 2px 0; border-bottom: 1px solid #1a0e0e; }
 .log-time { color: #6b4a4a; }
