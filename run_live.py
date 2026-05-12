@@ -77,7 +77,7 @@ class LiveTradingBot:
                 logger.warning("⚠️ No existing model, will train new one")
             
             # Initialize strategy components
-            self.signal_gen = SignalGenerator(self.ml_model)
+            self.signal_gen = SignalGenerator(self.ml_model, use_meta_strategy_selector=globals().get('USE_META_STRATEGY_SELECTOR', True))
             self.position_sizer = PositionSizer(method=POSITION_SIZING_METHOD, max_lot_size=MAX_LOT_SIZE)
             self.order_manager = OrderManager(
                 self.mt5,

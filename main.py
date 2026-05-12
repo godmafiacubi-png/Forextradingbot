@@ -94,7 +94,7 @@ class M30Analyzer:
     def __init__(self, mt5_conn, ml_model):
         self.mt5 = mt5_conn
         self.ml_model = ml_model
-        self.signal_gen = SignalGenerator(ml_model)
+        self.signal_gen = SignalGenerator(ml_model, use_meta_strategy_selector=globals().get('USE_META_STRATEGY_SELECTOR', True))
         self.m30_cache = {}
         self.cache_ttl = 120
 
@@ -246,7 +246,7 @@ class TradingBot:
             self.risk_guard = RiskGuard(self.mt5, RISK_CONFIG)
             logger.info("[OK] Risk Guard")
 
-            self.signal_gen = SignalGenerator(self.ml_model)
+            self.signal_gen = SignalGenerator(self.ml_model, use_meta_strategy_selector=globals().get('USE_META_STRATEGY_SELECTOR', True))
             self.position_sizer = PositionSizer(POSITION_SIZING_METHOD, ACCOUNT_RISK_PERCENT, MAX_DRAWDOWN_PERCENT, max_lot_size=MAX_LOT_SIZE)
             self.order_manager = OrderManager(
                 self.mt5,
