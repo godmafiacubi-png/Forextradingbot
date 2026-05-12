@@ -2,6 +2,8 @@ import numpy as np
 import pandas as pd
 import logging
 
+from strategy.meta_strategy_selector import MetaStrategySelector
+
 logger = logging.getLogger(__name__)
 
 # Maximum additive bonus that can be applied to base confidence per signal bar
@@ -11,8 +13,10 @@ _MAX_TOTAL_BONUS = 0.25
 class SignalGenerator:
     """Generate signals with ML + ICT confluence scoring"""
 
-    def __init__(self, ml_model):
+    def __init__(self, ml_model, use_meta_strategy_selector=True):
         self.ml_model = ml_model
+        self.use_meta_strategy_selector = use_meta_strategy_selector
+        self.meta_strategy_selector = MetaStrategySelector() if use_meta_strategy_selector else None
 
     def generate_signals(self, df, ml_threshold_buy=0.54, ml_threshold_sell=0.46):
         """
@@ -223,5 +227,8 @@ class SignalGenerator:
             df.iloc[i, df.columns.get_loc('signal')] = signal
             df.iloc[i, df.columns.get_loc('confidence')] = confidence
             df.iloc[i, df.columns.get_loc('ict_score')] = max(ict_buy, ict_sell)
+
+        if self.meta_strategy_selector is not None:
+            df = self.meta_strategy_selector.apply(df)
 
         return df

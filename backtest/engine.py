@@ -27,7 +27,7 @@ def get_contract_spec(symbol):
 class BacktestTrade:
     def __init__(self, ticket, symbol, side, entry_price, volume, sl, tp,
                  entry_time, entry_bar, confidence=0, atr=0, regime='GLOBAL',
-                 exit_policy=None):
+                 exit_policy=None, entry_strategy='unknown'):
         self.ticket = ticket
         self.symbol = symbol
         self.side = side
@@ -41,6 +41,7 @@ class BacktestTrade:
         self.atr = atr
         self.regime = regime
         self.exit_policy = exit_policy or {}
+        self.entry_strategy = entry_strategy
         self.exit_price = None
         self.exit_time = None
         self.exit_bar = None
@@ -87,6 +88,7 @@ class BacktestTrade:
             'max_adverse': round(self.max_adverse, 5),
             'duration_bars': self.duration_bars,
             'regime': self.regime,
+            'entry_strategy': self.entry_strategy,
             'sl_atr_mult': round(float(self.exit_policy.get('sl_atr_mult', 0)), 4),
             'tp_atr_mult': round(float(self.exit_policy.get('tp_atr_mult', 0)), 4),
             'risk_mult': round(float(self.exit_policy.get('risk_mult', 1.0)), 4),
@@ -344,6 +346,7 @@ class BacktestEngine:
             rsi = float(bar.get('rsi', 50))
             ict_score = int(bar.get('ict_score', 0))
             regime = bar.get('regime', bar.get('market_regime', bar.get('htf_regime', 'GLOBAL')))
+            entry_strategy = bar.get('entry_strategy', 'ict_ml_baseline')
 
             if signal == 0: continue
             if ict_score < self.min_ict_score:
@@ -432,7 +435,8 @@ class BacktestEngine:
                 'BUY' if signal == 1 else 'SELL',
                 entry, volume, sl, tp,
                 bar_time, i, confidence, atr,
-                regime=exit_policy['regime'], exit_policy=exit_policy
+                regime=exit_policy['regime'], exit_policy=exit_policy,
+                entry_strategy=entry_strategy
             )
             self.open_trades.append(trade)
             self.partial_done[trade.ticket] = [False] * len(exit_policy.get('partial_stages') or self.partial_stages)

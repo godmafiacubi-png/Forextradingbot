@@ -183,6 +183,18 @@ REQUIRE_ICT_CONFLUENCE = True
 MIN_QUALITY_SCORE = 55    
 
 # ============================================================
+# META STRATEGY / PRE-LIVE VALIDATION
+# ============================================================
+USE_META_STRATEGY_SELECTOR = _env_bool('USE_META_STRATEGY_SELECTOR', True)
+WALK_FORWARD_MIN_FOLDS = _env_int('WALK_FORWARD_MIN_FOLDS', 3)
+WALK_FORWARD_MIN_PROFIT_FACTOR = _env_float('WALK_FORWARD_MIN_PROFIT_FACTOR', 1.3)
+WALK_FORWARD_MAX_DRAWDOWN_PCT = _env_float('WALK_FORWARD_MAX_DRAWDOWN_PCT', 10.0)
+DEMO_FORWARD_MIN_DAYS = _env_int('DEMO_FORWARD_MIN_DAYS', 14)
+DEMO_FORWARD_MIN_TRADES = _env_int('DEMO_FORWARD_MIN_TRADES', 20)
+DEMO_FORWARD_MIN_PROFIT_FACTOR = _env_float('DEMO_FORWARD_MIN_PROFIT_FACTOR', 1.2)
+DEMO_FORWARD_MAX_DRAWDOWN_PCT = _env_float('DEMO_FORWARD_MAX_DRAWDOWN_PCT', 6.0)
+
+# ============================================================
 # QUIET MARKET KILL SWITCH
 # ============================================================
 QUIET_MARKET_ADX_THRESHOLD = 25  # block trades when regime=QUIET and ADX below this
