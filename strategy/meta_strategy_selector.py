@@ -223,6 +223,27 @@ class MetaStrategySelector:
     def _score(self, candidate):
         return candidate.confidence + min(candidate.ict_score, 4) * 0.03
 
+    def _ml_allows_candidate(self, row, candidate):
+        """Require ML confirmation for adaptive candidates when ML data is present.
+
+        The baseline generator treats ML as a confirmation layer, so adaptive
+        entries must not re-introduce trades that are clearly against the ML
+        probability.  If a historical/backtest frame does not provide
+        ``ml_probability`` we keep the legacy behaviour for compatibility.
+        """
+        if candidate.strategy == "ict_ml_baseline" or "ml_probability" not in row.index:
+            return True
+
+        ml_prob = _num(row, "ml_probability", 0.5)
+        buy_threshold = _num(row, "ml_threshold_buy", 0.54)
+        sell_threshold = _num(row, "ml_threshold_sell", 0.46)
+
+        if candidate.signal > 0:
+            return ml_prob > buy_threshold or (candidate.ict_score >= 3 and ml_prob > 0.52)
+        if candidate.signal < 0:
+            return ml_prob < sell_threshold or (candidate.ict_score >= 3 and ml_prob < 0.48)
+        return True
+
     def _base_candidate(self, row):
         signal = int(_num(row, "signal", 0))
         if signal == 0:
@@ -243,7 +264,7 @@ class MetaStrategySelector:
             self.regime_adaptive.evaluate(df, index),
             self.ranging.evaluate(df, index),
             self.breakout.evaluate(df, index),
-        ) if c is not None and c.signal != 0]
+        ) if c is not None and c.signal != 0 and self._ml_allows_candidate(row, c)]
 
         if not candidates:
             return EntryCandidate(0, 0.0, 0, "none", "no entry candidate")

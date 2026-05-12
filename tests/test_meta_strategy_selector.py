@@ -112,3 +112,45 @@ def test_walk_forward_validator_builds_splits_and_blocks_weak_demo():
     )
     assert demo["passed"] is False
     assert len(demo["checks"]) >= 4
+
+
+def test_meta_selector_blocks_adaptive_sell_against_bullish_ml():
+    df = _frame([
+        {"bos_bearish": 1, "adx": 42, "structure": -1, "htf_trend": -1},
+        {
+            "adx": 42,
+            "structure": -1,
+            "htf_trend": -1,
+            "near_supply_ob": 0.001,
+            "ml_probability": 0.69,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        },
+    ])
+
+    selected = MetaStrategySelector().apply(df).iloc[1]
+
+    assert selected["base_signal"] == 0
+    assert selected["signal"] == 0
+    assert selected["entry_strategy"] == "none"
+
+
+def test_meta_selector_allows_adaptive_sell_when_ml_confirms():
+    df = _frame([
+        {"bos_bearish": 1, "adx": 42, "structure": -1, "htf_trend": -1},
+        {
+            "adx": 42,
+            "structure": -1,
+            "htf_trend": -1,
+            "near_supply_ob": 0.001,
+            "ml_probability": 0.31,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        },
+    ])
+
+    selected = MetaStrategySelector().apply(df).iloc[1]
+
+    assert selected["base_signal"] == 0
+    assert selected["signal"] == -1
+    assert selected["entry_strategy"] in {"regime_adaptive_entry", "breakout_retest"}
