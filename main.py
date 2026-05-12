@@ -736,6 +736,11 @@ class TradingBot:
             base_signal = int(latest['signal'])
             base_conf = float(np.clip(latest['confidence'], 0.0, 0.95))  # cap ที่ 95% ป้องกัน overflow
             ict_score = int(latest.get('ict_score', 0))
+            raw_base_signal = int(latest.get('base_signal', base_signal))
+            raw_base_conf = float(np.clip(latest.get('base_confidence', base_conf), 0.0, 0.95))
+            entry_strategy = str(latest.get('entry_strategy', 'ict_ml_baseline') or 'ict_ml_baseline')
+            strategy_reason = str(latest.get('strategy_reason', '') or '')
+            strategy_conf = float(np.clip(latest.get('strategy_confidence', base_conf), 0.0, 1.0))
 
             has_pos = len(self.order_manager.get_open_positions(symbol)) > 0
             pnl_pct = 0.0
@@ -748,6 +753,11 @@ class TradingBot:
                 'ml_prob': ml_prob,
                 'confidence': base_conf,
                 'base_signal': 'BUY' if base_signal == 1 else ('SELL' if base_signal == -1 else 'HOLD'),
+                'raw_base_signal': 'BUY' if raw_base_signal == 1 else ('SELL' if raw_base_signal == -1 else 'HOLD'),
+                'raw_base_confidence': round(raw_base_conf, 4),
+                'entry_strategy': entry_strategy,
+                'strategy_confidence': round(strategy_conf, 4),
+                'strategy_reason': strategy_reason,
             }
 
             # ---- คำนวณ Swing Low / Swing High (20 bars) สำหรับ near-SR check ----
@@ -823,11 +833,19 @@ class TradingBot:
             logger.info(f"  │ DistSup: {dist_to_support:.1f}ATR  DistRes: {dist_to_resist:.1f}ATR  SwL: {swing_low:.5f}  SwH: {swing_high:.5f}")
             logger.info(f"  │ H1: {h1_trend}  H4: {htf_str}  RSI={rsi:.1f}  ADX={adx:.1f}  ML: {ml_prob:.4f}")
             logger.info(f"  │ DeepRL: {rl_name} | Regime: {regime_name} | {meta_tag} | Temporal: {'Y' if hub_result.temporal_enriched else 'N'} | Src: {rl_src}")
+            logger.info(
+                f"  │ Strategy: {entry_strategy} ({strategy_conf:.2%}) | "
+                f"Reason: {strategy_reason or 'n/a'}"
+            )
             if is_blackout:
                 logger.info(f"  │ NEWS: {news_reason}")
             if perf_adj:
                 logger.info(f"  │ AutoAdj: {perf_adj.get('reason', '')} conf>={effective_conf_thresh:.0%} adx>={adjusted_adx_thresh}")
-            logger.info(f"  │ ICT={ict_score} Base: {'BUY' if base_signal==1 else ('SELL' if base_signal==-1 else 'HOLD')} ({base_conf:.2%}) -> {signal_name} ({confidence:.2%})")
+            logger.info(
+                f"  │ ICT={ict_score} RawBase: {'BUY' if raw_base_signal==1 else ('SELL' if raw_base_signal==-1 else 'HOLD')} "
+                f"({raw_base_conf:.2%}) -> StrategyBase: {'BUY' if base_signal==1 else ('SELL' if base_signal==-1 else 'HOLD')} "
+                f"({base_conf:.2%}) -> {signal_name} ({confidence:.2%})"
+            )
 
             self.monitor.log_signal(symbol, signal, confidence)
 
@@ -955,6 +973,11 @@ class TradingBot:
                 'm30': m30_reason,
                 'rl_action': rl_name,
                 'source': rl_src,
+                'entry_strategy': entry_strategy,
+                'strategy_confidence': round(strategy_conf, 4),
+                'strategy_reason': strategy_reason,
+                'raw_base_signal': 'BUY' if raw_base_signal == 1 else ('SELL' if raw_base_signal == -1 else 'HOLD'),
+                'raw_base_confidence': round(raw_base_conf, 4),
                 'spread': round(float(cur_spread), 2),
                 'avg_spread': round(float(avg_spread), 2),
                 'adx': round(float(adx), 2),
