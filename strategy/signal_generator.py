@@ -34,6 +34,9 @@ class SignalGenerator:
         df['signal'] = 0
         df['confidence'] = 0.0
         df['ict_score'] = 0
+        df['ml_probability'] = 0.5
+        df['ml_threshold_buy'] = float(ml_threshold_buy)
+        df['ml_threshold_sell'] = float(ml_threshold_sell)
 
         try:
             ml_probs = self.ml_model.predict(df)
@@ -227,6 +230,7 @@ class SignalGenerator:
             df.iloc[i, df.columns.get_loc('signal')] = signal
             df.iloc[i, df.columns.get_loc('confidence')] = confidence
             df.iloc[i, df.columns.get_loc('ict_score')] = max(ict_buy, ict_sell)
+            df.iloc[i, df.columns.get_loc('ml_probability')] = ml_prob
 
         if self.meta_strategy_selector is not None:
             df = self.meta_strategy_selector.apply(df)
