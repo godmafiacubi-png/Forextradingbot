@@ -84,3 +84,37 @@ def test_place_order_blocks_when_slippage_exceeds_guard(monkeypatch):
 
     assert ticket is None
     assert sent == []
+
+
+def test_place_order_sends_to_mt5_when_live_and_valid(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    manager = module.OrderManager(_Connector(), dry_run=False, magic=99, deviation=5)
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_SELL, 0.2, 1.101, 1.098, "live-test")
+
+    assert ticket == 123
+    assert len(sent) == 1
+    assert sent[0]["type"] == module.mt5.ORDER_TYPE_SELL
+
+
+def test_buy_order_rejects_wrong_side_sl_tp_before_send(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    manager = module.OrderManager(_Connector(), dry_run=False, magic=99, deviation=5)
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.101, 1.099, "bad-buy")
+
+    assert ticket is None
+    assert sent == []
+
+
+def test_sell_order_rejects_wrong_side_sl_tp_before_send(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    manager = module.OrderManager(_Connector(), dry_run=False, magic=99, deviation=5)
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_SELL, 0.1, 1.099, 1.102, "bad-sell")
+
+    assert ticket is None
+    assert sent == []

@@ -2,16 +2,19 @@ import pandas as pd
 from datetime import datetime
 import logging
 
+from execution.trade_logger import TradeJournal
+
 logger = logging.getLogger(__name__)
 
 
 class PerformanceTracker:
     """Track bot performance — ใช้ PnL จริงจาก MT5"""
 
-    def __init__(self):
+    def __init__(self, journal=None):
         self.trades = []
         self.open_trades = {}
         self.balance_history = []
+        self.journal = journal if journal is not None else TradeJournal()
 
     def log_trade(self, ticket, symbol, side, price, size):
         """Log new trade opened"""
@@ -23,6 +26,7 @@ class PerformanceTracker:
             'size': size,
             'open_time': datetime.now()
         }
+        self.journal.log_open(ticket, symbol, side, size, price, comment="performance_tracker")
         logger.info(f"[TRACKER] Logged #{ticket} {side} {symbol} {size}lots @{price:.5f}")
 
     def close_trade(self, ticket, exit_price, actual_pnl=None):
@@ -60,6 +64,10 @@ class PerformanceTracker:
             'close_time': datetime.now()
         })
 
+        self.journal.log_close(
+            ticket, trade['symbol'], trade['side'], trade['size'], exit_price, pnl,
+            comment="performance_tracker",
+        )
         result = "WIN" if pnl > 0 else "LOSS"
         logger.info(f"[TRACKER] Closed #{ticket} {trade['symbol']} {trade['side']} {result} PnL=${pnl:.2f}")
 

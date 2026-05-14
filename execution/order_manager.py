@@ -11,7 +11,7 @@ class OrderManager:
     """Execute and manage orders — trailing + news protection + partial close."""
 
     def __init__(self, mt5_connector, max_open_trades=3, max_per_symbol=1,
-                 dry_run=False, magic=123456, deviation=20):
+                 dry_run=True, magic=123456, deviation=20):
         self.mt5 = mt5_connector
         self.max_open_trades = max_open_trades
         self.max_per_symbol = max_per_symbol
@@ -57,6 +57,22 @@ class OrderManager:
         decimals = max(0, -step_dec.as_tuple().exponent)
         return float(round(rounded, decimals))
 
+    @staticmethod
+    def _is_buy(order_type):
+        return order_type == mt5.ORDER_TYPE_BUY or order_type == 0
+
+    def _validate_sl_tp_side(self, symbol, price, sl, tp, order_type):
+        """Reject SL/TP that are on the wrong side before any broker stop-level adjustment."""
+        if self._is_buy(order_type):
+            if sl <= 0 or tp <= 0 or sl >= price or tp <= price:
+                logger.error(f"Invalid BUY SL/TP for {symbol}: price={price} sl={sl} tp={tp}")
+                return False
+        else:
+            if sl <= 0 or tp <= 0 or sl <= price or tp >= price:
+                logger.error(f"Invalid SELL SL/TP for {symbol}: price={price} sl={sl} tp={tp}")
+                return False
+        return True
+
     def _check_stop_level(self, symbol, price, sl, tp, order_type):
         """เช็คว่า SL/TP อยู่ห่างจากราคาพอตาม broker stop level"""
         try:
@@ -70,7 +86,7 @@ class OrderManager:
                 return sl, tp
 
             min_distance = stop_level * point
-            if order_type == mt5.ORDER_TYPE_BUY or order_type == 0:
+            if self._is_buy(order_type):
                 if sl > 0 and (price - sl) < min_distance:
                     sl = price - min_distance
                     logger.debug(f"[STOP_LEVEL] {symbol} BUY SL adjusted to {sl:.5f} (min_dist={min_distance:.5f})")
@@ -138,16 +154,12 @@ class OrderManager:
             digits = self._get_digits(symbol)
             stop_loss = round(stop_loss, digits)
             take_profit = round(take_profit, digits)
-            stop_loss, take_profit = self._check_stop_level(symbol, price, stop_loss, take_profit, order_type)
+            if not self._validate_sl_tp_side(symbol, price, stop_loss, take_profit, order_type):
+                return None
 
-            if order_type == mt5.ORDER_TYPE_BUY:
-                if stop_loss >= price or take_profit <= price:
-                    logger.error(f"Invalid BUY SL/TP: price={price} sl={stop_loss} tp={take_profit}")
-                    return None
-            else:
-                if stop_loss <= price or take_profit >= price:
-                    logger.error(f"Invalid SELL SL/TP: price={price} sl={stop_loss} tp={take_profit}")
-                    return None
+            stop_loss, take_profit = self._check_stop_level(symbol, price, stop_loss, take_profit, order_type)
+            if not self._validate_sl_tp_side(symbol, price, stop_loss, take_profit, order_type):
+                return None
 
             vol_min = si.get('volume_min', 0.01)
             vol_max = si.get('volume_max', 100.0)

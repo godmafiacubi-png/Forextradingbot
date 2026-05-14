@@ -1,5 +1,9 @@
-import numpy as np
-import pandas as pd
+import pytest
+
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
+pytest.importorskip("sklearn")
+pytest.importorskip("xgboost")
 
 from ml_models.ensemble import EnsembleModel
 from ml_models.hyperparameter_tuner import HyperparameterTuner
