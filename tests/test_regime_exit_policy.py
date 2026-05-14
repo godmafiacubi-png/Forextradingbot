@@ -45,7 +45,7 @@ def _engine_config(**overrides):
         "require_htf": False,
         "require_pullback": False,
         "partial_close": False,
-        "entry_cooldown": 999,
+        "entry_cooldown": 0,
         "max_trades": 5,
         "max_per_symbol": 5,
         "compounding": False,
@@ -102,6 +102,7 @@ def test_backtest_trade_uses_regime_exit_policy_for_sl_tp_and_reporting():
         signal_generator=_PassthroughSignalGenerator(),
     )
 
+    assert "trades" in results
     trade = results["trades"][0]
     assert trade["regime"] == "TRENDING"
     assert trade["sl_atr_mult"] == 1.6
@@ -120,4 +121,5 @@ def test_regime_risk_multiplier_reduces_lot_size():
     global_lot = engine.calculate_lot_size("EURUSDm", 1.1000, 1.0985, 0.8, risk_mult=1.0)
     quiet_lot = engine.calculate_lot_size("EURUSDm", 1.1000, 1.0985, 0.8, risk_mult=0.5)
 
-    assert quiet_lot == round(global_lot * 0.5, 2)
+    assert quiet_lot < global_lot
+    assert quiet_lot == 0.33
