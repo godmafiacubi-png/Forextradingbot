@@ -18,6 +18,9 @@ from contextlib import contextmanager
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+MODEL_ARTIFACT_ALLOWLIST = ROOT / "config" / "model_artifact_allowlist.txt"
+APPROVED_MODEL_ARTIFACT_PREFIXES = ("models/approved/",)
+DISALLOWED_MODEL_ARTIFACT_PREFIXES = ("models/tmp/", "models/checkpoints/")
 
 
 @contextmanager
@@ -83,6 +86,15 @@ def tracked_files() -> list[str]:
     return result.stdout.splitlines()
 
 
+def model_artifact_allowlist() -> set[str]:
+    if not MODEL_ARTIFACT_ALLOWLIST.exists():
+        return set()
+    return {
+        line.strip() for line in MODEL_ARTIFACT_ALLOWLIST.read_text(encoding="utf-8").splitlines()
+        if line.strip() and not line.startswith("#")
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate pre-live safety gates")
     parser.add_argument("--ci", action="store_true", help="Run non-interactive CI-safe checks")
@@ -108,13 +120,26 @@ def main() -> int:
         check("LIVE_TRADING_CONFIRMED=false" in text, ".env.example defaults to unconfirmed live trading", failures)
 
     risky_suffixes = (".pkl", ".joblib", ".pt", ".pth", ".h5", ".keras")
-    tracked_risky = [path for path in tracked_files() if path.startswith("models/") and path.endswith(risky_suffixes)]
-    if tracked_risky and args.ci:
-        print("[WARN] Existing model artifacts are tracked; avoid adding more generated artifacts:")
-        for path in tracked_risky[:20]:
-            print(f"  - {path}")
-    else:
-        check(not tracked_risky, "no generated model artifacts are tracked", failures)
+    tracked_risky = [
+        path for path in tracked_files()
+        if path.startswith("models/") and path.endswith(risky_suffixes)
+    ]
+    allowed_artifacts = model_artifact_allowlist()
+    check(MODEL_ARTIFACT_ALLOWLIST.exists(), "model artifact allowlist exists", failures)
+    unapproved_artifacts = [
+        path for path in tracked_risky
+        if not path.startswith(APPROVED_MODEL_ARTIFACT_PREFIXES) and path not in allowed_artifacts
+    ]
+    disallowed_artifacts = [
+        path for path in tracked_risky
+        if path.startswith(DISALLOWED_MODEL_ARTIFACT_PREFIXES)
+    ]
+    check(not unapproved_artifacts, "tracked model artifacts are limited to explicit allowlists", failures)
+    check(not disallowed_artifacts, "no tmp/checkpoint model artifacts are tracked", failures)
+    for path in unapproved_artifacts[:20]:
+        print(f"  - unapproved artifact: {path}")
+    for path in disallowed_artifacts[:20]:
+        print(f"  - disallowed artifact: {path}")
 
     if failures:
         print("\nPre-live validation failed:")

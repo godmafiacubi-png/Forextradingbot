@@ -24,6 +24,18 @@ JOURNAL_FIELDS = [
     "comment",
 ]
 
+EVENT_SIGNAL = "SIGNAL"
+EVENT_ORDER_ATTEMPT = "ORDER_ATTEMPT"
+EVENT_ORDER_REJECTED = "ORDER_REJECTED"
+EVENT_ORDER_FAILED = "ORDER_FAILED"
+EVENT_ORDER_FILLED = "ORDER_FILLED"
+EVENT_OPEN = "OPEN"
+EVENT_SL_MODIFIED = "SL_MODIFIED"
+EVENT_PARTIAL_CLOSE = "PARTIAL_CLOSE"
+EVENT_CLOSE = "CLOSE"
+EVENT_RISK_BLOCKED = "RISK_BLOCKED"
+EVENT_NEWS_BLOCKED = "NEWS_BLOCKED"
+
 
 class TradeJournal:
     """Append-only CSV/SQLite journal for order and trade lifecycle events."""
@@ -96,8 +108,39 @@ class TradeJournal:
                 )
         return row
 
+    def log_signal(self, symbol, side="", price=None, comment=""):
+        return self.append_event(EVENT_SIGNAL, symbol=symbol, side=side, price=price, comment=comment)
+
+    def log_order_attempt(self, symbol, side, volume, price, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_ORDER_ATTEMPT, symbol=symbol, side=side, volume=volume,
+                                 price=price, sl=sl, tp=tp, comment=comment)
+
+    def log_order_rejected(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_ORDER_REJECTED, symbol=symbol, side=side, volume=volume,
+                                 price=price, sl=sl, tp=tp, comment=comment)
+
+    def log_order_failed(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_ORDER_FAILED, symbol=symbol, side=side, volume=volume,
+                                 price=price, sl=sl, tp=tp, comment=comment)
+
+    def log_order_filled(self, ticket, symbol, side, volume, price, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_ORDER_FILLED, ticket, symbol, side, volume, price, sl, tp, None, comment)
+
     def log_open(self, ticket, symbol, side, volume, price, sl=None, tp=None, comment=""):
-        return self.append_event("OPEN", ticket, symbol, side, volume, price, sl, tp, None, comment)
+        return self.append_event(EVENT_OPEN, ticket, symbol, side, volume, price, sl, tp, None, comment)
+
+    def log_sl_modified(self, ticket, symbol="", side="", price=None, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_SL_MODIFIED, ticket, symbol, side, None, price, sl, tp, None, comment)
+
+    def log_partial_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment=""):
+        return self.append_event(EVENT_PARTIAL_CLOSE, ticket, symbol, side, volume, price, None, None, pnl, comment)
 
     def log_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment=""):
-        return self.append_event("CLOSE", ticket, symbol, side, volume, price, None, None, pnl, comment)
+        return self.append_event(EVENT_CLOSE, ticket, symbol, side, volume, price, None, None, pnl, comment)
+
+    def log_risk_blocked(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_RISK_BLOCKED, symbol=symbol, side=side, volume=volume,
+                                 price=price, sl=sl, tp=tp, comment=comment)
+
+    def log_news_blocked(self, ticket=None, symbol="", side="", price=None, sl=None, tp=None, comment=""):
+        return self.append_event(EVENT_NEWS_BLOCKED, ticket, symbol, side, None, price, sl, tp, None, comment)
