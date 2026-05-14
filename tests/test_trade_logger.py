@@ -9,7 +9,21 @@ def test_trade_journal_writes_csv_and_sqlite(tmp_path):
     sqlite_path = tmp_path / "trades.sqlite3"
     journal = TradeJournal(csv_path=csv_path, sqlite_path=sqlite_path)
 
-    journal.log_signal("XAUUSDm", "BUY", 2350.0, comment="signal")
+    journal.log_signal(
+        "XAUUSDm",
+        "BUY",
+        2350.0,
+        comment="signal",
+        balance=10_000,
+        equity=10_010,
+        spread=120,
+        slippage_points=2.5,
+        confidence=0.72,
+        risk_pct=0.25,
+        regime="TREND",
+        session="NewYork",
+        reason="quality=A",
+    )
     journal.log_order_attempt("XAUUSDm", "BUY", 0.1, 2350.0, sl=2340.0, tp=2370.0, comment="attempt")
     journal.log_order_filled(123, "XAUUSDm", "BUY", 0.1, 2350.0, sl=2340.0, tp=2370.0, comment="filled")
     journal.log_open(123, "XAUUSDm", "BUY", 0.1, 2350.0, sl=2340.0, tp=2370.0, comment="open")
@@ -37,8 +51,21 @@ def test_trade_journal_writes_csv_and_sqlite(tmp_path):
         "NEWS_BLOCKED",
     ]
     assert rows[0]["symbol"] == "XAUUSDm"
+    assert rows[0]["equity"] == "10010"
+    assert rows[0]["spread"] == "120"
+    assert rows[0]["slippage_points"] == "2.5"
+    assert rows[0]["confidence"] == "0.72"
+    assert rows[0]["risk_pct"] == "0.25"
+    assert rows[0]["regime"] == "TREND"
+    assert rows[0]["session"] == "NewYork"
+    assert rows[0]["reason"] == "quality=A"
     assert rows[2]["ticket"] == "123"
 
     with sqlite3.connect(sqlite_path) as conn:
         count = conn.execute("SELECT COUNT(*) FROM trade_journal").fetchone()[0]
+        row = conn.execute(
+            "SELECT equity, spread, slippage_points, confidence, risk_pct, regime, session, reason "
+            "FROM trade_journal WHERE event_type='SIGNAL'"
+        ).fetchone()
     assert count == 11
+    assert row == (10010.0, 120.0, 2.5, 0.72, 0.25, "TREND", "NewYork", "quality=A")
