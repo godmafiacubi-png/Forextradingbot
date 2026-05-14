@@ -21,6 +21,15 @@ JOURNAL_FIELDS = [
     "sl",
     "tp",
     "pnl",
+    "balance",
+    "equity",
+    "spread",
+    "slippage_points",
+    "confidence",
+    "risk_pct",
+    "regime",
+    "session",
+    "reason",
     "comment",
 ]
 
@@ -72,13 +81,38 @@ class TradeJournal:
                     sl REAL,
                     tp REAL,
                     pnl REAL,
+                    balance REAL,
+                    equity REAL,
+                    spread REAL,
+                    slippage_points REAL,
+                    confidence REAL,
+                    risk_pct REAL,
+                    regime TEXT,
+                    session TEXT,
+                    reason TEXT,
                     comment TEXT
                 )
                 """
             )
+            existing = {row[1] for row in conn.execute("PRAGMA table_info(trade_journal)")}
+            for field, sql_type in (
+                ("balance", "REAL"),
+                ("equity", "REAL"),
+                ("spread", "REAL"),
+                ("slippage_points", "REAL"),
+                ("confidence", "REAL"),
+                ("risk_pct", "REAL"),
+                ("regime", "TEXT"),
+                ("session", "TEXT"),
+                ("reason", "TEXT"),
+            ):
+                if field not in existing:
+                    conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {field} {sql_type}")
 
     def append_event(self, event_type, ticket=None, symbol="", side="", volume=None,
-                     price=None, sl=None, tp=None, pnl=None, comment=""):
+                     price=None, sl=None, tp=None, pnl=None, balance=None, equity=None,
+                     spread=None, slippage_points=None, confidence=None, risk_pct=None,
+                     regime="", session="", reason="", comment=""):
         row = {
             "event_time": self._now_iso(),
             "event_type": event_type,
@@ -90,6 +124,15 @@ class TradeJournal:
             "sl": sl,
             "tp": tp,
             "pnl": pnl,
+            "balance": balance,
+            "equity": equity,
+            "spread": spread,
+            "slippage_points": slippage_points,
+            "confidence": confidence,
+            "risk_pct": risk_pct,
+            "regime": regime or "",
+            "session": session or "",
+            "reason": reason or "",
             "comment": comment or "",
         }
         if self.csv_path:
@@ -98,49 +141,53 @@ class TradeJournal:
         if self.sqlite_path:
             with sqlite3.connect(self.sqlite_path) as conn:
                 conn.execute(
-                    """
-                    INSERT INTO trade_journal (
-                        event_time, event_type, ticket, symbol, side, volume,
-                        price, sl, tp, pnl, comment
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    f"""
+                    INSERT INTO trade_journal ({', '.join(JOURNAL_FIELDS)})
+                    VALUES ({', '.join('?' for _ in JOURNAL_FIELDS)})
                     """,
                     tuple(row[field] for field in JOURNAL_FIELDS),
                 )
         return row
 
-    def log_signal(self, symbol, side="", price=None, comment=""):
-        return self.append_event(EVENT_SIGNAL, symbol=symbol, side=side, price=price, comment=comment)
+    def log_signal(self, symbol, side="", price=None, comment="", **context):
+        return self.append_event(EVENT_SIGNAL, symbol=symbol, side=side, price=price, comment=comment, **context)
 
-    def log_order_attempt(self, symbol, side, volume, price, sl=None, tp=None, comment=""):
+    def log_order_attempt(self, symbol, side, volume, price, sl=None, tp=None, comment="", **context):
         return self.append_event(EVENT_ORDER_ATTEMPT, symbol=symbol, side=side, volume=volume,
-                                 price=price, sl=sl, tp=tp, comment=comment)
+                                 price=price, sl=sl, tp=tp, comment=comment, **context)
 
-    def log_order_rejected(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment=""):
+    def log_order_rejected(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment="", **context):
         return self.append_event(EVENT_ORDER_REJECTED, symbol=symbol, side=side, volume=volume,
-                                 price=price, sl=sl, tp=tp, comment=comment)
+                                 price=price, sl=sl, tp=tp, comment=comment, **context)
 
-    def log_order_failed(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment=""):
+    def log_order_failed(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment="", **context):
         return self.append_event(EVENT_ORDER_FAILED, symbol=symbol, side=side, volume=volume,
-                                 price=price, sl=sl, tp=tp, comment=comment)
+                                 price=price, sl=sl, tp=tp, comment=comment, **context)
 
-    def log_order_filled(self, ticket, symbol, side, volume, price, sl=None, tp=None, comment=""):
-        return self.append_event(EVENT_ORDER_FILLED, ticket, symbol, side, volume, price, sl, tp, None, comment)
+    def log_order_filled(self, ticket, symbol, side, volume, price, sl=None, tp=None, comment="", **context):
+        return self.append_event(EVENT_ORDER_FILLED, ticket, symbol, side, volume, price, sl, tp, None,
+                                 comment=comment, **context)
 
-    def log_open(self, ticket, symbol, side, volume, price, sl=None, tp=None, comment=""):
-        return self.append_event(EVENT_OPEN, ticket, symbol, side, volume, price, sl, tp, None, comment)
+    def log_open(self, ticket, symbol, side, volume, price, sl=None, tp=None, comment="", **context):
+        return self.append_event(EVENT_OPEN, ticket, symbol, side, volume, price, sl, tp, None,
+                                 comment=comment, **context)
 
-    def log_sl_modified(self, ticket, symbol="", side="", price=None, sl=None, tp=None, comment=""):
-        return self.append_event(EVENT_SL_MODIFIED, ticket, symbol, side, None, price, sl, tp, None, comment)
+    def log_sl_modified(self, ticket, symbol="", side="", price=None, sl=None, tp=None, comment="", **context):
+        return self.append_event(EVENT_SL_MODIFIED, ticket, symbol, side, None, price, sl, tp, None,
+                                 comment=comment, **context)
 
-    def log_partial_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment=""):
-        return self.append_event(EVENT_PARTIAL_CLOSE, ticket, symbol, side, volume, price, None, None, pnl, comment)
+    def log_partial_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment="", **context):
+        return self.append_event(EVENT_PARTIAL_CLOSE, ticket, symbol, side, volume, price, None, None, pnl,
+                                 comment=comment, **context)
 
-    def log_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment=""):
-        return self.append_event(EVENT_CLOSE, ticket, symbol, side, volume, price, None, None, pnl, comment)
+    def log_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment="", **context):
+        return self.append_event(EVENT_CLOSE, ticket, symbol, side, volume, price, None, None, pnl,
+                                 comment=comment, **context)
 
-    def log_risk_blocked(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment=""):
+    def log_risk_blocked(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment="", **context):
         return self.append_event(EVENT_RISK_BLOCKED, symbol=symbol, side=side, volume=volume,
-                                 price=price, sl=sl, tp=tp, comment=comment)
+                                 price=price, sl=sl, tp=tp, comment=comment, **context)
 
-    def log_news_blocked(self, ticket=None, symbol="", side="", price=None, sl=None, tp=None, comment=""):
-        return self.append_event(EVENT_NEWS_BLOCKED, ticket, symbol, side, None, price, sl, tp, None, comment)
+    def log_news_blocked(self, ticket=None, symbol="", side="", price=None, sl=None, tp=None, comment="", **context):
+        return self.append_event(EVENT_NEWS_BLOCKED, ticket, symbol, side, None, price, sl, tp, None,
+                                 comment=comment, **context)
