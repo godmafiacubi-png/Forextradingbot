@@ -1,9 +1,0 @@
-{
-  "total_decisions": 2832,
-  "rl_trades": 0,
-  "rl_wins": 0,
-  "rl_losses": 0,
-  "total_reward": 0.0,
-  "avg_reward": 0.0,
-  "epsilon": 1.0
-}

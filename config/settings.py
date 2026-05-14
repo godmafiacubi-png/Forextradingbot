@@ -183,7 +183,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 55    
+MIN_QUALITY_SCORE = 65    
 
 # ============================================================
 # META STRATEGY / PRE-LIVE VALIDATION
@@ -255,7 +255,7 @@ MAX_SPREAD_POINTS = {
     'EURUSDm': 13,
     'GBPUSDm': 15,
     'USDJPYm': 15,
-    'BTCUSDm': 1500,
+    'BTCUSDm': 1600,
     'XAUUSDm': 350,
 }
 DEFAULT_MAX_SPREAD_POINTS = 50
