@@ -1,0 +1,14 @@
+{
+  "version": "2.2",
+  "use_cross_symbol": true,
+  "train_step": 0,
+  "total_frames": 0,
+  "total_trades": 0,
+  "total_wins": 0,
+  "total_reward": 0.0,
+  "global_epsilon": 1.0,
+  "symbol_epsilon": {},
+  "action_counts": {},
+  "symbol_performance": {},
+  "saved_at": "2026-05-14T22:34:32.968023"
+}
