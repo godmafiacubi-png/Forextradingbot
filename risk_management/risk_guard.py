@@ -42,8 +42,11 @@ class RiskGuard:
         self.peak_balance = 0
         self.recovery_mode = False
 
-        # Spread history
+        # Spread and emergency safety tracking
         self.spread_history = defaultdict(list)
+        self.failed_order_count = 0
+        self.halt_new_orders = False
+        self.halt_reason = ''
 
         # Partial close tracking
         self.partial_close_done = {}  # {ticket: {'stage1': bool, 'stage2': bool}}
@@ -111,6 +114,44 @@ class RiskGuard:
                 self.daily_equity_pnl = current_equity - self.daily_start_equity
         except Exception:
             pass
+
+    def trigger_halt(self, reason):
+        """Hard-stop new order creation until an operator resets the guard."""
+        self.halt_new_orders = True
+        self.halt_reason = reason
+        logger.error(f"[RISK] EMERGENCY HALT — {reason}")
+
+    def reset_halt(self):
+        """Operator-controlled reset for test/demo recovery after investigation."""
+        self.halt_new_orders = False
+        self.halt_reason = ''
+        self.failed_order_count = 0
+
+    def record_order_failure(self, reason='order send failed'):
+        """Track consecutive execution failures and halt if the configured cap is reached."""
+        self.failed_order_count += 1
+        max_failures = self.cfg.get('MAX_CONSECUTIVE_ORDER_FAILURES', 3)
+        if self.failed_order_count >= max_failures:
+            self.trigger_halt(f"Consecutive order failures: {self.failed_order_count} ({reason})")
+
+    def record_order_success(self):
+        """Reset execution-failure counter after a confirmed successful order."""
+        self.failed_order_count = 0
+
+    def check_emergency_guard(self):
+        """Check account-level hard stops before symbol-level trading filters."""
+        if self.halt_new_orders:
+            return False, self.halt_reason or 'Emergency halt active'
+
+        if self.daily_start_equity > 0:
+            daily_dd_pct = (-self.daily_equity_pnl / self.daily_start_equity) * 100
+            max_daily_dd = self.cfg.get('MAX_INTRADAY_EQUITY_DRAWDOWN_PCT')
+            if max_daily_dd is not None and daily_dd_pct >= max_daily_dd:
+                reason = f"Intraday equity drawdown: {daily_dd_pct:.1f}% (max {max_daily_dd}%)"
+                self.trigger_halt(reason)
+                return False, reason
+
+        return True, ''
 
     def record_trade_result(self, pnl):
         """Record a closed trade result"""
@@ -407,6 +448,11 @@ class RiskGuard:
         """
         reasons = []
 
+        # Emergency account-level hard stop
+        ok, reason = self.check_emergency_guard()
+        if not ok:
+            reasons.append(reason)
+
         # Daily limit
         ok, reason = self.check_daily_limit()
         if not ok:
@@ -464,6 +510,9 @@ class RiskGuard:
             'daily_wins': self.daily_wins,
             'daily_losses': self.daily_losses,
             'consecutive_losses': self.consecutive_losses,
+            'failed_order_count': self.failed_order_count,
+            'halt_new_orders': self.halt_new_orders,
+            'halt_reason': self.halt_reason,
             'cooldown_until': self.cooldown_until.strftime('%H:%M') if self.cooldown_until else None,
             'recovery_mode': self.recovery_mode,
             'drawdown_pct': dd,

@@ -1,8 +1,49 @@
-venv/ 
-__pycache__/ 
-*.log 
-.env 
+# Python environments
+venv/
+.venv/
+env/
+ENV/
 
+# Python caches/build output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+build/
+dist/
+*.egg-info/
+
+# Local secrets/configuration
+.env
+.env.*
+!.env.example
+
+# Logs and journals
+*.log
 journal/
 *.sqlite
 *.sqlite3
+*.db
+
+# Generated models/checkpoints
+models/*.pkl
+models/*.joblib
+models/*.pt
+models/*.pth
+models/*.h5
+models/*.keras
+models/**/*.pkl
+models/**/*.joblib
+models/**/*.pt
+models/**/*.pth
+models/**/*.h5
+models/**/*.keras
+
+# Research/backtest artifacts
+backtest_results/
+reports/
+*.csv
+*.parquet

@@ -46,6 +46,21 @@ class MT5Connector:
             self.connected = False
             return False
 
+    def ensure_connected(self, max_reconnects=3):
+        """Reconnect a dropped MT5 session with a bounded fail-closed retry count."""
+        if self.connected:
+            return True
+
+        attempts = max(max_reconnects, 0)
+        for attempt in range(1, attempts + 1):
+            logger.warning(f"MT5 disconnected; reconnect attempt {attempt}/{attempts}")
+            if self.connect():
+                return True
+
+        self.connected = False
+        logger.error("MT5 reconnect failed; connector remains fail-closed")
+        return False
+
     def get_ohlcv(self, symbol, timeframe, bars=100):
         """Fetch OHLCV data."""
         try:

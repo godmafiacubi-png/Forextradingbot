@@ -296,7 +296,7 @@ class ShapedRewardCalculator:
         self.high_spread_symbols = {'XAUUSDm', 'BTCUSDm'}  # penalize extra
         self._current_symbol = None
 
-    def calculate_trade_reward(self, pnl, pnl_pct, equity, hold_bars, regime, rr_ratio=1.5):
+    def calculate_trade_reward(self, pnl, pnl_pct, equity, hold_bars, regime, rr_ratio=1.5, symbol=None):
         reward = 0.0
 
         if pnl > 0:
