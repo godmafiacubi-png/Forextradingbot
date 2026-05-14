@@ -132,14 +132,15 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 # EXECUTION SAFETY
 # ============================================================
-DRY_RUN_REQUESTED = _env_bool('DRY_RUN', False)
-LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', True)
-# Fail-safe: live order routing is enabled only when DRY_RUN=false and
+DRY_RUN_REQUESTED = _env_bool('DRY_RUN', True)
+LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', False)
+# Fail-closed: live order routing is enabled only when DRY_RUN=false and
 # LIVE_TRADING_CONFIRMED=true are both set explicitly in the environment.
 DRY_RUN = DRY_RUN_REQUESTED or not LIVE_TRADING_CONFIRMED
 ORDER_MAGIC = _env_int('ORDER_MAGIC', 123456)
 ORDER_DEVIATION = _env_int('ORDER_DEVIATION', 20)
 MAX_LOT_SIZE = _env_float('MAX_LOT_SIZE', 2.0)
+SETTINGS_PROFILE = os.getenv('SETTINGS_PROFILE', 'default').strip().lower()
 
 # ============================================================
 # POSITION SIZING
@@ -415,6 +416,28 @@ SYMBOL_SETTINGS = {
         'max_lot': 0.5,
     },
 }
+
+
+# ============================================================
+# CONFIG PROFILE OVERRIDES
+# ============================================================
+def _load_profile_overrides(profile_name):
+    if profile_name == 'live':
+        from config.settings_live import PROFILE_OVERRIDES
+    elif profile_name == 'demo':
+        from config.settings_demo import PROFILE_OVERRIDES
+    else:
+        from config.settings_default import PROFILE_OVERRIDES
+    return PROFILE_OVERRIDES
+
+
+def _apply_profile_overrides(profile_name):
+    overrides = _load_profile_overrides(profile_name)
+    for key, value in overrides.items():
+        globals()[key] = value
+
+
+_apply_profile_overrides(SETTINGS_PROFILE)
 
 
 # ============================================================

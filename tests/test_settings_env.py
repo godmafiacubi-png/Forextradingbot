@@ -103,3 +103,25 @@ def test_xauusd_spread_cap_matches_broker_points(monkeypatch):
 
     assert settings.SYMBOL_POINTS["XAUUSDm"] == 0.001
     assert settings.MAX_SPREAD_POINTS["XAUUSDm"] >= 300
+
+
+def test_live_profile_still_fails_closed_without_confirmation(monkeypatch):
+    monkeypatch.setenv("SETTINGS_PROFILE", "live")
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    monkeypatch.delenv("LIVE_TRADING_CONFIRMED", raising=False)
+
+    settings = _load_settings(monkeypatch)
+
+    assert settings.PROFILE_NAME == "live"
+    assert settings.DRY_RUN is True
+
+
+def test_demo_profile_forces_dry_run(monkeypatch):
+    monkeypatch.setenv("SETTINGS_PROFILE", "demo")
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("LIVE_TRADING_CONFIRMED", "true")
+
+    settings = _load_settings(monkeypatch)
+
+    assert settings.PROFILE_NAME == "demo"
+    assert settings.DRY_RUN is True

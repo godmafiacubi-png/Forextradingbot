@@ -1,4 +1,6 @@
-import numpy as np
+import pytest
+
+np = pytest.importorskip("numpy")
 
 from ml_models.deep_rl_agent_v22 import DeepRLTradingAgent
 
