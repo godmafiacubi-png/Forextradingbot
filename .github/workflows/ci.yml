@@ -27,4 +27,12 @@ jobs:
       - name: Secret scan
         run: python scripts/check_no_secrets.py
       - name: Run pytest with coverage
-        run: pytest -q --cov=. --cov-report=term-missing --cov-fail-under=10
+        run: >-
+          pytest -q
+          --cov=execution
+          --cov=risk_management
+          --cov=scripts
+          --cov=config
+          --cov=data_layer
+          --cov-report=term-missing
+          --cov-fail-under=25

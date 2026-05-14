@@ -196,3 +196,55 @@ def test_close_order_journals_close_event(monkeypatch, tmp_path):
     assert [row["event_type"] for row in rows] == ["CLOSE"]
     assert rows[0]["ticket"] == "77"
     assert rows[0]["side"] == "BUY"
+
+
+class _RiskGuardSpy:
+    def __init__(self):
+        self.failures = []
+        self.successes = 0
+
+    def record_order_failure(self, reason=""):
+        self.failures.append(reason)
+
+    def record_order_success(self):
+        self.successes += 1
+
+
+def test_risk_aware_journal_records_broker_failure_from_order_manager(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, retcode=10030)
+    from execution.risk_aware_journal import RiskAwareTradeJournal
+    from execution.trade_logger import TradeJournal
+
+    risk_guard = _RiskGuardSpy()
+    journal_path = tmp_path / "trades.csv"
+    trade_journal = RiskAwareTradeJournal(TradeJournal(csv_path=journal_path), risk_guard)
+    manager = module.OrderManager(_Connector(), dry_run=False, trade_journal=trade_journal)
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.2, 1.099, 1.102, "risk-fail")
+
+    assert ticket is None
+    assert risk_guard.failures == ["retcode=10030: ok"]
+    assert risk_guard.successes == 0
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["ORDER_ATTEMPT", "ORDER_FAILED"]
+
+
+def test_risk_aware_journal_records_order_success_from_order_manager(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.risk_aware_journal import RiskAwareTradeJournal
+    from execution.trade_logger import TradeJournal
+
+    risk_guard = _RiskGuardSpy()
+    journal_path = tmp_path / "trades.csv"
+    trade_journal = RiskAwareTradeJournal(TradeJournal(csv_path=journal_path), risk_guard)
+    manager = module.OrderManager(_Connector(), dry_run=False, trade_journal=trade_journal)
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.2, 1.099, 1.102, "risk-success")
+
+    assert ticket == 123
+    assert risk_guard.failures == []
+    assert risk_guard.successes >= 1
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["ORDER_ATTEMPT", "ORDER_FILLED", "OPEN"]
