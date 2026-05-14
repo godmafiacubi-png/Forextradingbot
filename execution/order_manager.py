@@ -11,13 +11,31 @@ class OrderManager:
     """Execute and manage orders — trailing + news protection + partial close."""
 
     def __init__(self, mt5_connector, max_open_trades=3, max_per_symbol=1,
-                 dry_run=True, magic=123456, deviation=20):
+                 dry_run=True, magic=123456, deviation=20, trade_journal=None):
         self.mt5 = mt5_connector
         self.max_open_trades = max_open_trades
         self.max_per_symbol = max_per_symbol
         self.dry_run = dry_run
         self.magic = magic
         self.deviation = deviation
+        self.trade_journal = trade_journal
+
+    def _journal_event(self, method_name, *args, **kwargs):
+        if self.trade_journal is None:
+            return None
+        try:
+            return getattr(self.trade_journal, method_name)(*args, **kwargs)
+        except Exception as exc:
+            logger.warning(f"Trade journal write failed: {exc}")
+            return None
+
+    @staticmethod
+    def _side_label(order_type):
+        return "BUY" if OrderManager._is_buy(order_type) else "SELL"
+
+    @staticmethod
+    def _position_side(pos):
+        return "BUY" if getattr(pos, "type", None) == 0 else "SELL"
 
     def set_limits(self, max_open_trades, max_per_symbol=None):
         self.max_open_trades = max_open_trades
@@ -133,12 +151,21 @@ class OrderManager:
     def place_order(self, symbol, order_type, volume, stop_loss, take_profit, comment="",
                     reference_price=None, max_slippage_points=None):
         try:
+            side = self._side_label(order_type)
             if not self.can_open_trade(symbol):
                 logger.info(f"[SKIP] {symbol} position limit reached")
+                self._journal_event(
+                    "log_risk_blocked", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
+                    comment="position limit reached",
+                )
                 return None
 
             si = self.mt5.get_symbol_info(symbol)
             if si is None:
+                self._journal_event(
+                    "log_order_failed", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
+                    comment="symbol info unavailable",
+                )
                 return None
 
             price = si['ask'] if order_type == mt5.ORDER_TYPE_BUY else si['bid']
@@ -146,19 +173,32 @@ class OrderManager:
             if reference_price is not None and max_slippage_points is not None and point > 0:
                 slippage_points = abs(price - reference_price) / point
                 if slippage_points > max_slippage_points:
-                    logger.warning(
-                        f"[SKIP] {symbol} slippage guard: {slippage_points:.1f}pts > {max_slippage_points}pts "
+                    message = (
+                        f"slippage guard: {slippage_points:.1f}pts > {max_slippage_points}pts "
                         f"(ref={reference_price}, exec={price})"
+                    )
+                    logger.warning(f"[SKIP] {symbol} {message}")
+                    self._journal_event(
+                        "log_order_rejected", symbol, side=side, volume=volume, price=price,
+                        sl=stop_loss, tp=take_profit, comment=message,
                     )
                     return None
             digits = self._get_digits(symbol)
             stop_loss = round(stop_loss, digits)
             take_profit = round(take_profit, digits)
             if not self._validate_sl_tp_side(symbol, price, stop_loss, take_profit, order_type):
+                self._journal_event(
+                    "log_order_rejected", symbol, side=side, volume=volume, price=price,
+                    sl=stop_loss, tp=take_profit, comment="invalid SL/TP side",
+                )
                 return None
 
             stop_loss, take_profit = self._check_stop_level(symbol, price, stop_loss, take_profit, order_type)
             if not self._validate_sl_tp_side(symbol, price, stop_loss, take_profit, order_type):
+                self._journal_event(
+                    "log_order_rejected", symbol, side=side, volume=volume, price=price,
+                    sl=stop_loss, tp=take_profit, comment="invalid SL/TP after stop-level adjustment",
+                )
                 return None
 
             vol_min = si.get('volume_min', 0.01)
@@ -167,7 +207,12 @@ class OrderManager:
             volume = max(min(volume, vol_max), vol_min)
             volume = self._round_volume(volume, vol_step)
             if volume < vol_min or volume > vol_max:
-                logger.error(f"Invalid volume after rounding: {volume} not in [{vol_min}, {vol_max}]")
+                message = f"Invalid volume after rounding: {volume} not in [{vol_min}, {vol_max}]"
+                logger.error(message)
+                self._journal_event(
+                    "log_order_rejected", symbol, side=side, volume=volume, price=price,
+                    sl=stop_loss, tp=take_profit, comment=message,
+                )
                 return None
 
             request = {
@@ -178,17 +223,33 @@ class OrderManager:
                 "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_IOC,
             }
 
-            d = "BUY" if order_type == mt5.ORDER_TYPE_BUY else "SELL"
-            result = self._send_order(request, f"would place {d} {symbol} {volume} lots")
+            self._journal_event(
+                "log_order_attempt", symbol, side, volume, price,
+                sl=stop_loss, tp=take_profit, comment=comment,
+            )
+            result = self._send_order(request, f"would place {side} {symbol} {volume} lots")
             if self.dry_run:
                 return None
             if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
                 error_msg = result.comment if result else 'None'
                 retcode = result.retcode if result else 0
+                message = f"retcode={retcode}: {error_msg}"
                 logger.error(f"Order failed [{retcode}]: {error_msg}")
+                self._journal_event(
+                    "log_order_failed", symbol, side=side, volume=volume, price=price,
+                    sl=stop_loss, tp=take_profit, comment=message,
+                )
                 return None
 
-            logger.info(f"[TRADE] {d} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
+            logger.info(f"[TRADE] {side} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
+            self._journal_event(
+                "log_order_filled", result.order, symbol, side, volume, price,
+                sl=stop_loss, tp=take_profit, comment=comment,
+            )
+            self._journal_event(
+                "log_open", result.order, symbol, side, volume, price,
+                sl=stop_loss, tp=take_profit, comment=comment,
+            )
             return result.order
         except Exception as e:
             logger.error(f"Place order error: {e}")
@@ -246,13 +307,25 @@ class OrderManager:
             }
             result = self._send_order(request, f"would modify #{ticket} SL={sl} TP={tp}")
             if self.dry_run:
+                self._journal_event(
+                    "log_sl_modified", ticket, pos.symbol, self._position_side(pos), sl=sl, tp=tp,
+                    comment="dry-run SL/TP modify",
+                )
                 return True
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[MODIFY] #{ticket} {pos.symbol} SL={sl:.{digits}f} TP={tp:.{digits}f}")
+                self._journal_event(
+                    "log_sl_modified", ticket, pos.symbol, self._position_side(pos), sl=sl, tp=tp,
+                    comment="SL/TP modified",
+                )
                 return True
             error_msg = result.comment if result else 'None'
             retcode = result.retcode if result else 0
             logger.warning(f"[MODIFY] #{ticket} failed [{retcode}]: {error_msg}")
+            self._journal_event(
+                "log_order_failed", pos.symbol, side=self._position_side(pos), sl=sl, tp=tp,
+                comment=f"SL/TP modify failed retcode={retcode}: {error_msg}",
+            )
             return False
         except Exception as e:
             logger.error(f"Modify SL/TP error: {e}")
@@ -272,13 +345,25 @@ class OrderManager:
             }
             result = self._send_order(request, f"would move SL #{pos.ticket} to {new_sl}")
             if self.dry_run:
+                self._journal_event(
+                    "log_sl_modified", pos.ticket, pos.symbol, self._position_side(pos),
+                    sl=new_sl, tp=pos.tp, comment="dry-run SL modify",
+                )
                 return True
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[SL] #{pos.ticket} {pos.symbol} SL -> {new_sl:.{digits}f}")
+                self._journal_event(
+                    "log_sl_modified", pos.ticket, pos.symbol, self._position_side(pos),
+                    sl=new_sl, tp=pos.tp, comment="SL modified",
+                )
                 return True
             error_msg = result.comment if result else 'None'
             retcode = result.retcode if result else 0
             logger.warning(f"[SL] #{pos.ticket} failed [{retcode}]: {error_msg}")
+            self._journal_event(
+                "log_order_failed", pos.symbol, side=self._position_side(pos), sl=new_sl, tp=pos.tp,
+                comment=f"SL modify failed retcode={retcode}: {error_msg}",
+            )
             return False
         except Exception as e:
             logger.error(f"_modify_sl error: {e}")
@@ -319,12 +404,25 @@ class OrderManager:
 
             result = self._send_order(request, f"would partial close #{ticket} {close_volume} lots")
             if self.dry_run:
+                self._journal_event(
+                    "log_partial_close", ticket, pos.symbol, self._position_side(pos), close_volume, price,
+                    comment="dry-run partial close",
+                )
                 return True
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[PARTIAL] #{ticket} {pos.symbol} closed {close_volume}/{pos.volume} lots ({close_pct:.0%})")
+                self._journal_event(
+                    "log_partial_close", ticket, pos.symbol, self._position_side(pos), close_volume, price,
+                    comment=f"partial close {close_pct:.0%}",
+                )
                 return True
             error_msg = result.comment if result else 'None'
+            retcode = result.retcode if result else 0
             logger.warning(f"[PARTIAL] #{ticket} failed: {error_msg}")
+            self._journal_event(
+                "log_order_failed", pos.symbol, side=self._position_side(pos), volume=close_volume, price=price,
+                comment=f"partial close failed retcode={retcode}: {error_msg}",
+            )
             return False
         except Exception as e:
             logger.error(f"Partial close error: {e}")
@@ -340,6 +438,10 @@ class OrderManager:
                 entry = pos.price_open
 
                 if action == 'FORCE_CLOSE':
+                    self._journal_event(
+                        "log_news_blocked", pos.ticket, symbol, self._position_side(pos), price=cp,
+                        sl=pos.sl, tp=pos.tp, comment="news protection force close",
+                    )
                     self.close_order(pos.ticket)
                     continue
 
@@ -374,6 +476,10 @@ class OrderManager:
                             new_sl = p
 
                 if new_sl and self._modify_sl(pos, new_sl):
+                    self._journal_event(
+                        "log_news_blocked", pos.ticket, symbol, self._position_side(pos), price=cp,
+                        sl=new_sl, tp=pos.tp, comment=f"news protection {action}",
+                    )
                     logger.info(f"[NEWS] {action} #{pos.ticket} {symbol} SL -> {new_sl:.5f}")
         except Exception as e:
             logger.error(f"News protection error: {e}")
@@ -398,10 +504,24 @@ class OrderManager:
             }
             r = self._send_order(request, f"would close #{ticket}")
             if self.dry_run:
+                self._journal_event(
+                    "log_close", ticket, pos.symbol, self._position_side(pos), pos.volume, price,
+                    comment="dry-run close",
+                )
                 return True
             if r and r.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[CLOSE] #{ticket} {pos.symbol}")
+                self._journal_event(
+                    "log_close", ticket, pos.symbol, self._position_side(pos), pos.volume, price,
+                    comment="closed",
+                )
                 return True
+            error_msg = r.comment if r else 'None'
+            retcode = r.retcode if r else 0
+            self._journal_event(
+                "log_order_failed", pos.symbol, side=self._position_side(pos), volume=pos.volume, price=price,
+                comment=f"close failed retcode={retcode}: {error_msg}",
+            )
             return False
         except Exception as e:
             logger.error(f"Close error: {e}")

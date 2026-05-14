@@ -76,6 +76,17 @@ PY
 
 `pytest` currently focuses on dependency-light smoke coverage for the default dashboard and position sizing. Add MT5-mocked tests for order execution, risk guard decisions, signal generation, and dashboard integration before relying on automated coverage for production behavior.
 
+## Forward performance reporting
+
+Use the trade journal as the source of truth for demo/live-readiness decisions.
+Generate a dependency-light report from the CSV journal before considering real-money live routing:
+
+```bash
+python scripts/generate_forward_report.py --journal journal/trades.csv --output journal/forward_report.txt
+```
+
+The report summarizes total trades, win rate, profit factor, max drawdown, average win/loss, expectancy, largest loss, consecutive losses, symbol/session breakdowns, execution failures, and average slippage when slippage markers are present in journal comments.
+
 ## Backtesting
 
 Backtest utilities live in `backtest/`, and historical report artifacts are stored in `backtest_results/`. Use them to validate symbol-specific assumptions before enabling live execution.
