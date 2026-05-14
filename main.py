@@ -42,6 +42,8 @@ from strategy.smart_filters import (
 from risk_management.position_sizer import PositionSizer
 from risk_management.risk_guard import RiskGuard
 from execution.order_manager import OrderManager
+from execution.trade_logger import TradeJournal
+from execution.risk_aware_journal import RiskAwareTradeJournal
 from monitoring.simple_dashboard import SimpleMonitor
 from monitoring.performance_tracker import PerformanceTracker
 from monitoring.telegram_alerts import TelegramAlerts
@@ -246,6 +248,9 @@ class TradingBot:
             self.risk_guard = RiskGuard(self.mt5, RISK_CONFIG)
             logger.info("[OK] Risk Guard")
 
+            base_journal = TradeJournal(csv_path="journal/trades.csv", sqlite_path="journal/trades.sqlite3")
+            self.trade_journal = RiskAwareTradeJournal(base_journal, self.risk_guard)
+
             self.signal_gen = SignalGenerator(self.ml_model, use_meta_strategy_selector=globals().get('USE_META_STRATEGY_SELECTOR', True))
             self.position_sizer = PositionSizer(POSITION_SIZING_METHOD, ACCOUNT_RISK_PERCENT, MAX_DRAWDOWN_PERCENT, max_lot_size=MAX_LOT_SIZE)
             self.order_manager = OrderManager(
@@ -255,6 +260,7 @@ class TradingBot:
                 dry_run=DRY_RUN,
                 magic=ORDER_MAGIC,
                 deviation=ORDER_DEVIATION,
+                trade_journal=self.trade_journal,
             )
             self.monitor = SimpleMonitor()
             self.tracker = PerformanceTracker()
