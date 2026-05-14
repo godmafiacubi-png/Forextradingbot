@@ -1,0 +1,6 @@
+# Monitoring and dashboard dependencies.
+-r requirements-core.txt
+
+plotly==5.24.0
+dash==2.15.0
+python-telegram-bot==21.0

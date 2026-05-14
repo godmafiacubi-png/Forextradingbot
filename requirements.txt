@@ -1,35 +1,6 @@
-# Python 3.11.9 compatible versions
-
-# MT5 & Data
-MetaTrader5==5.0.45
-pandas==2.2.0
-numpy==1.26.0
-
-# ML & AI
-tensorflow==2.15.1
-scikit-learn==1.4.0
-xgboost==2.1.0
-lightgbm==4.3.0
-
-# RL
-stable-baselines3==2.2.0
-
-# Technical Analysis
-ccxt==4.5.46
-
-# Utils
-python-dotenv==1.0.0
-requests==2.32.0
-
-# Backtesting (Use correct version)
-backtrader==1.9.78.123
-
-# Monitoring
-plotly==5.24.0
-dash==2.15.0
-python-telegram-bot==21.0
-
-# Additional
-scipy==1.12.0
-matplotlib==3.8.0
+# Full development/research install. CI should prefer requirements-dev.txt.
+-r requirements-core.txt
+-r requirements-ml.txt
+-r requirements-dashboard.txt
+-r requirements-dev.txt
 jupyter==1.0.0

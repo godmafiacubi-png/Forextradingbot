@@ -90,3 +90,38 @@ def test_spread_filter_tracks_average_before_absolute_cap(monkeypatch):
     assert spread == 40
     assert avg == 26.4
     assert guard.spread_history["XAUUSDm"] == [20, 22, 24, 26, 40]
+
+
+def test_emergency_guard_halts_on_intraday_equity_drawdown(monkeypatch):
+    module = _load_risk_guard(monkeypatch)
+    connector = _Connector(balance=10_000, equity=10_000)
+    guard = module.RiskGuard(connector, {"MAX_INTRADAY_EQUITY_DRAWDOWN_PCT": 2.0})
+
+    connector.equity = 9_750
+    guard.update()
+    ok, reason = guard.check_emergency_guard()
+
+    assert ok is False
+    assert "Intraday equity drawdown" in reason
+    assert guard.halt_new_orders is True
+    assert guard.get_status()["halt_new_orders"] is True
+
+
+def test_order_failures_trigger_halt_and_success_resets_counter(monkeypatch):
+    module = _load_risk_guard(monkeypatch)
+    guard = module.RiskGuard(_Connector(), {"MAX_CONSECUTIVE_ORDER_FAILURES": 2})
+
+    guard.record_order_failure("retcode rejected")
+    assert guard.halt_new_orders is False
+
+    guard.record_order_failure("retcode rejected")
+    ok, reason = guard.check_emergency_guard()
+
+    assert ok is False
+    assert "Consecutive order failures" in reason
+
+    guard.reset_halt()
+    guard.record_order_failure("temporary")
+    guard.record_order_success()
+    assert guard.failed_order_count == 0
+    assert guard.halt_new_orders is False

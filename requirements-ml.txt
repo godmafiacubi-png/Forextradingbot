@@ -1,0 +1,7 @@
+# Heavy ML/RL dependencies. Install only for model training/research jobs.
+-r requirements-core.txt
+
+tensorflow==2.15.1
+xgboost==2.1.0
+lightgbm==4.3.0
+stable-baselines3==2.2.0
