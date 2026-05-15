@@ -11,7 +11,8 @@ class OrderManager:
     """Execute and manage orders — trailing + news protection + partial close."""
 
     def __init__(self, mt5_connector, max_open_trades=3, max_per_symbol=1,
-                 dry_run=True, magic=123456, deviation=20, trade_journal=None):
+                 dry_run=True, magic=123456, deviation=20, trade_journal=None,
+                 slippage_cooldown_seconds=None):
         self.mt5 = mt5_connector
         self.max_open_trades = max_open_trades
         self.max_per_symbol = max_per_symbol
@@ -19,6 +20,14 @@ class OrderManager:
         self.magic = magic
         self.deviation = deviation
         self.trade_journal = trade_journal
+        if slippage_cooldown_seconds is None:
+            try:
+                from config.settings import SLIPPAGE_REJECTION_COOLDOWN_SECONDS
+                slippage_cooldown_seconds = SLIPPAGE_REJECTION_COOLDOWN_SECONDS
+            except Exception:
+                slippage_cooldown_seconds = 600
+        self.slippage_cooldown_seconds = max(0, float(slippage_cooldown_seconds))
+        self._slippage_cooldowns = {}
 
     def _journal_event(self, method_name, *args, **kwargs):
         if self.trade_journal is None:
@@ -36,6 +45,48 @@ class OrderManager:
     @staticmethod
     def _position_side(pos):
         return "BUY" if getattr(pos, "type", None) == 0 else "SELL"
+
+    @staticmethod
+    def _cooldown_key(symbol, side):
+        return (str(symbol).upper(), str(side).upper())
+
+    @staticmethod
+    def _calculate_rr(side, request_price, sl, tp):
+        if str(side).upper() == "BUY":
+            risk = request_price - sl
+            reward = tp - request_price
+        else:
+            risk = sl - request_price
+            reward = request_price - tp
+        rr = reward / risk if risk > 0 and reward > 0 else None
+        return risk, reward, rr
+
+    @staticmethod
+    def _with_execution_context(comment, signal_price, execution_price, rr=None):
+        parts = []
+        if comment:
+            parts.append(str(comment))
+        if signal_price is not None:
+            parts.append(f"signal_price={signal_price}")
+        parts.append(f"execution_price={execution_price}")
+        if rr is not None:
+            parts.append(f"rr={rr:.2f}")
+        return " | ".join(parts)
+
+    def _slippage_cooldown_remaining(self, symbol, side):
+        expires_at = self._slippage_cooldowns.get(self._cooldown_key(symbol, side))
+        if expires_at is None:
+            return 0
+        remaining = expires_at - time.time()
+        if remaining <= 0:
+            self._slippage_cooldowns.pop(self._cooldown_key(symbol, side), None)
+            return 0
+        return remaining
+
+    def _start_slippage_cooldown(self, symbol, side):
+        if self.slippage_cooldown_seconds <= 0:
+            return
+        self._slippage_cooldowns[self._cooldown_key(symbol, side)] = time.time() + self.slippage_cooldown_seconds
 
     def set_limits(self, max_open_trades, max_per_symbol=None):
         self.max_open_trades = max_open_trades
@@ -152,6 +203,16 @@ class OrderManager:
                     reference_price=None, max_slippage_points=None):
         try:
             side = self._side_label(order_type)
+            cooldown_remaining = self._slippage_cooldown_remaining(symbol, side)
+            if cooldown_remaining > 0:
+                message = "slippage cooldown"
+                logger.warning(f"[SKIP] {symbol} {side} {message} ({cooldown_remaining:.0f}s remaining)")
+                self._journal_event(
+                    "log_order_rejected", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
+                    reason=message, comment=message,
+                )
+                return None
+
             if not self.can_open_trade(symbol):
                 logger.info(f"[SKIP] {symbol} position limit reached")
                 self._journal_event(
@@ -178,6 +239,7 @@ class OrderManager:
                         f"(ref={reference_price}, exec={price})"
                     )
                     logger.warning(f"[SKIP] {symbol} {message}")
+                    self._start_slippage_cooldown(symbol, side)
                     self._journal_event(
                         "log_order_rejected", symbol, side=side, volume=volume, price=price,
                         sl=stop_loss, tp=take_profit, comment=message,
@@ -198,6 +260,20 @@ class OrderManager:
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, comment="invalid SL/TP after stop-level adjustment",
+                )
+                return None
+
+            risk, reward, rr = self._calculate_rr(side, price, stop_loss, take_profit)
+            execution_comment = self._with_execution_context(comment, reference_price, price, rr)
+            if risk <= 0 or reward <= 0:
+                message = (
+                    f"invalid execution RR: risk={risk:.10f} reward={reward:.10f} "
+                    f"signal_price={reference_price} execution_price={price}"
+                )
+                logger.error(f"[SKIP] {symbol} {side} {message}")
+                self._journal_event(
+                    "log_order_rejected", symbol, side=side, volume=volume, price=price,
+                    sl=stop_loss, tp=take_profit, comment=message,
                 )
                 return None
 
@@ -223,9 +299,14 @@ class OrderManager:
                 "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_IOC,
             }
 
+            logger.info(
+                f"[EXECUTION] {symbol} {side} signal_price={reference_price} "
+                f"execution_price={price:.{digits}f} SL={stop_loss:.{digits}f} "
+                f"TP={take_profit:.{digits}f} R:R=1:{rr:.2f}"
+            )
             self._journal_event(
                 "log_order_attempt", symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=comment,
+                sl=stop_loss, tp=take_profit, comment=execution_comment,
             )
             result = self._send_order(request, f"would place {side} {symbol} {volume} lots")
             if self.dry_run:
@@ -244,11 +325,11 @@ class OrderManager:
             logger.info(f"[TRADE] {side} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
             self._journal_event(
                 "log_order_filled", result.order, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=comment,
+                sl=stop_loss, tp=take_profit, comment=execution_comment,
             )
             self._journal_event(
                 "log_open", result.order, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=comment,
+                sl=stop_loss, tp=take_profit, comment=execution_comment,
             )
             return result.order
         except Exception as e:
