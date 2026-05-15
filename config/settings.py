@@ -183,7 +183,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 65    
+MIN_QUALITY_SCORE = 55    
 
 # ============================================================
 # META STRATEGY / PRE-LIVE VALIDATION
@@ -260,9 +260,9 @@ MAX_SPREAD_POINTS = {
 }
 DEFAULT_MAX_SPREAD_POINTS = 50
 MAX_SLIPPAGE_POINTS = {
-    'EURUSDm': 10,
-    'GBPUSDm': 12,
-    'USDJPYm': 12,
+    'EURUSDm': 30,
+    'GBPUSDm': 30,
+    'USDJPYm': 30,
     'BTCUSDm': 2000,
     'XAUUSDm': 80,
 }
