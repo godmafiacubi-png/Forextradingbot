@@ -3,6 +3,8 @@ import importlib
 import sys
 import types
 
+import pytest
+
 
 class _SymbolInfo:
     digits = 5
@@ -137,13 +139,19 @@ def test_place_order_writes_execution_journal_events(monkeypatch, tmp_path):
         trade_journal=TradeJournal(csv_path=journal_path),
     )
 
-    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.2, 1.099, 1.102, "journal-test")
+    ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.2, 1.099, 1.102, "journal-test",
+        reference_price=1.10000, max_slippage_points=50,
+    )
 
     assert ticket == 123
     rows = _journal_rows(journal_path)
     assert [row["event_type"] for row in rows] == ["ORDER_ATTEMPT", "ORDER_FILLED", "OPEN"]
     assert rows[0]["side"] == "BUY"
     assert rows[1]["ticket"] == "123"
+    assert "signal_price=1.1" in rows[0]["comment"]
+    assert "execution_price=1.1002" in rows[0]["comment"]
+    assert "rr=1.50" in rows[0]["comment"]
 
 
 def test_place_order_journals_rejected_slippage(monkeypatch, tmp_path):
@@ -248,3 +256,137 @@ def test_risk_aware_journal_records_order_success_from_order_manager(monkeypatch
     assert risk_guard.successes >= 1
     rows = _journal_rows(journal_path)
     assert [row["event_type"] for row in rows] == ["ORDER_ATTEMPT", "ORDER_FILLED", "OPEN"]
+
+
+def test_first_slippage_reject_starts_symbol_side_cooldown(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    now = [1000.0]
+    monkeypatch.setattr(module.time, "time", lambda: now[0])
+    manager = module.OrderManager(_Connector(), dry_run=False, slippage_cooldown_seconds=600)
+
+    ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10000, max_slippage_points=10,
+    )
+
+    assert ticket is None
+    assert sent == []
+    assert manager._slippage_cooldown_remaining("EURUSDm", "BUY") == 600
+
+
+def test_slippage_cooldown_blocks_repeated_same_symbol_side_before_attempt(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    now = [1000.0]
+    monkeypatch.setattr(module.time, "time", lambda: now[0])
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path),
+        slippage_cooldown_seconds=600,
+    )
+
+    manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10000, max_slippage_points=10,
+    )
+    ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10020, max_slippage_points=10,
+    )
+
+    assert ticket is None
+    assert sent == []
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["ORDER_REJECTED", "ORDER_REJECTED"]
+    assert rows[1]["reason"] == "slippage cooldown"
+    assert rows[1]["comment"] == "slippage cooldown"
+
+
+def test_slippage_cooldown_does_not_block_opposite_side_or_different_symbol(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    now = [1000.0]
+    monkeypatch.setattr(module.time, "time", lambda: now[0])
+    manager = module.OrderManager(_Connector(), dry_run=False, slippage_cooldown_seconds=600)
+
+    manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10000, max_slippage_points=10,
+    )
+    sell_ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_SELL, 0.1, 1.101, 1.098,
+        reference_price=1.10000, max_slippage_points=10,
+    )
+    other_symbol_ticket = manager.place_order(
+        "GBPUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10020, max_slippage_points=10,
+    )
+
+    assert sell_ticket == 123
+    assert other_symbol_ticket == 123
+    assert len(sent) == 2
+    assert sent[0]["symbol"] == "EURUSDm"
+    assert sent[0]["type"] == module.mt5.ORDER_TYPE_SELL
+    assert sent[1]["symbol"] == "GBPUSDm"
+    assert sent[1]["type"] == module.mt5.ORDER_TYPE_BUY
+
+
+def test_slippage_cooldown_expires_and_allows_attempt(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    now = [1000.0]
+    monkeypatch.setattr(module.time, "time", lambda: now[0])
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path),
+        slippage_cooldown_seconds=10,
+    )
+
+    manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10000, max_slippage_points=10,
+    )
+    now[0] = 1005.0
+    manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10020, max_slippage_points=10,
+    )
+    now[0] = 1011.0
+    ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10020, max_slippage_points=10,
+    )
+
+    assert ticket == 123
+    assert len(sent) == 1
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == [
+        "ORDER_REJECTED", "ORDER_REJECTED", "ORDER_ATTEMPT", "ORDER_FILLED", "OPEN"
+    ]
+
+
+def test_calculate_execution_rr_for_buy(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+
+    risk, reward, rr = module.OrderManager._calculate_rr("BUY", 1.10020, 1.09900, 1.10200)
+
+    assert risk == pytest.approx(0.00120)
+    assert reward == pytest.approx(0.00180)
+    assert rr == pytest.approx(1.5)
+
+
+def test_calculate_execution_rr_for_sell(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+
+    risk, reward, rr = module.OrderManager._calculate_rr("SELL", 1.10000, 1.10100, 1.09800)
+
+    assert risk == pytest.approx(0.00100)
+    assert reward == pytest.approx(0.00200)
+    assert rr == pytest.approx(2.0)

@@ -1017,9 +1017,13 @@ class TradingBot:
                 return
 
             ot = mt5.ORDER_TYPE_BUY if signal == 1 else mt5.ORDER_TYPE_SELL
-            rr = tp_mult / sl_mult
+            planned_rr = tp_mult / sl_mult
 
-            logger.info(f"  [{symbol}] EXEC: {signal_name} {lot}lots @{price:.5f} SL={sl:.5f} TP={tp:.5f} R:R=1:{rr:.1f} [{regime_name}]")
+            logger.info(
+                f"  [{symbol}] ORDER_REQUEST: {signal_name} {lot}lots signal_price={price:.5f} "
+                f"SL={sl:.5f} TP={tp:.5f} planned_R:R=1:{planned_rr:.1f}; "
+                f"execution RR uses broker bid/ask in OrderManager [{regime_name}]"
+            )
 
             max_slippage = MAX_SLIPPAGE_POINTS.get(symbol, DEFAULT_MAX_SLIPPAGE_POINTS)
             ticket = self.order_manager.place_order(
@@ -1051,7 +1055,7 @@ class TradingBot:
                         f"{signal_name} {symbol} | {lot} lots\n"
                         f"Price: {price:.5f}\n"
                         f"SL: {sl:.5f} | TP: {tp:.5f}\n"
-                        f"Conf: {confidence:.1%} | R:R=1:{rr:.1f}\n"
+                        f"Conf: {confidence:.1%} | Planned R:R=1:{planned_rr:.1f}\n"
                         f"Quality: {quality_score}/100 | ICT:{ict_score}\n"
                         f"Regime: {regime_name} | M30: {m30_reason}\n"
                         f"Equity: ${ai['equity']:.2f} ({growth:+.1f}%)"
