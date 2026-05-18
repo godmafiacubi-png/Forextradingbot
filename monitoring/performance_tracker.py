@@ -1,4 +1,3 @@
-import pandas as pd
 from datetime import datetime
 import logging
 
@@ -26,8 +25,7 @@ class PerformanceTracker:
             'size': size,
             'open_time': datetime.now()
         }
-        self.journal.log_open(ticket, symbol, side, size, price, comment="performance_tracker")
-        logger.info(f"[TRACKER] Logged #{ticket} {side} {symbol} {size}lots @{price:.5f}")
+        logger.info(f"[TRACKER] Tracked #{ticket} {side} {symbol} {size}lots @{price:.5f}; OPEN journal owned by OrderManager")
 
     def close_trade(self, ticket, exit_price, actual_pnl=None):
         """
@@ -66,7 +64,7 @@ class PerformanceTracker:
 
         self.journal.log_close(
             ticket, trade['symbol'], trade['side'], trade['size'], exit_price, pnl,
-            comment="performance_tracker",
+            comment="performance_tracker", source="performance_tracker",
         )
         result = "WIN" if pnl > 0 else "LOSS"
         logger.info(f"[TRACKER] Closed #{ticket} {trade['symbol']} {trade['side']} {result} PnL=${pnl:.2f}")
@@ -108,37 +106,26 @@ class PerformanceTracker:
         })
 
     def get_stats(self):
-        """Get performance statistics"""
+        """Get performance statistics."""
         if not self.trades:
             return None
 
-        df = pd.DataFrame(self.trades)
+        pnls = [float(trade.get('pnl') or 0.0) for trade in self.trades]
+        total_pnl = sum(pnls)
+        wins = [pnl for pnl in pnls if pnl > 0]
+        losses = [pnl for pnl in pnls if pnl < 0]
+        total = len(self.trades)
+        win_rate = len(wins) / total if total > 0 else 0
 
-        total_pnl = df['pnl'].sum()
-        win_trades = (df['pnl'] > 0).sum()
-        lose_trades = (df['pnl'] < 0).sum()
-        total = len(df)
-        win_rate = win_trades / total if total > 0 else 0
-
-        wins_df = df[df['pnl'] > 0]
-        loss_df = df[df['pnl'] < 0]
-
-        avg_win = wins_df['pnl'].mean() if len(wins_df) > 0 else 0
-        avg_loss = loss_df['pnl'].mean() if len(loss_df) > 0 else 0
-
-        total_win = wins_df['pnl'].sum() if len(wins_df) > 0 else 0
-        total_loss = abs(loss_df['pnl'].sum()) if len(loss_df) > 0 else 0
-
-        best_trade = df['pnl'].max() if total > 0 else 0
-        worst_trade = df['pnl'].min() if total > 0 else 0
-
+        total_win = sum(wins)
+        total_loss = abs(sum(losses))
         profit_factor = total_win / total_loss if total_loss > 0 else (999.0 if total_win > 0 else 0)
 
         max_consec_win = 0
         max_consec_loss = 0
         consec_win = 0
         consec_loss = 0
-        for pnl in df['pnl']:
+        for pnl in pnls:
             if pnl > 0:
                 consec_win += 1
                 consec_loss = 0
@@ -149,26 +136,35 @@ class PerformanceTracker:
                 max_consec_loss = max(max_consec_loss, consec_loss)
 
         symbol_stats = {}
-        for sym in df['symbol'].unique():
-            sym_df = df[df['symbol'] == sym]
-            sym_wins = (sym_df['pnl'] > 0).sum()
-            symbol_stats[sym] = {
-                'trades': len(sym_df),
-                'pnl': round(sym_df['pnl'].sum(), 2),
-                'win_rate': round(sym_wins / len(sym_df), 3) if len(sym_df) > 0 else 0,
+        for trade in self.trades:
+            sym = trade.get('symbol') or 'UNKNOWN'
+            bucket = symbol_stats.setdefault(sym, {'trades': 0, 'pnl': 0.0, 'wins': 0})
+            pnl = float(trade.get('pnl') or 0.0)
+            bucket['trades'] += 1
+            bucket['pnl'] += pnl
+            if pnl > 0:
+                bucket['wins'] += 1
+
+        symbol_stats = {
+            sym: {
+                'trades': values['trades'],
+                'pnl': round(values['pnl'], 2),
+                'win_rate': round(values['wins'] / values['trades'], 3) if values['trades'] else 0,
             }
+            for sym, values in symbol_stats.items()
+        }
 
         return {
             'total_trades': total,
             'open_trades': len(self.open_trades),
             'total_pnl': round(total_pnl, 2),
             'win_rate': round(win_rate, 4),
-            'win_trades': int(win_trades),
-            'lose_trades': int(lose_trades),
-            'avg_win': round(avg_win, 2),
-            'avg_loss': round(avg_loss, 2),
-            'best_trade': round(best_trade, 2),
-            'worst_trade': round(worst_trade, 2),
+            'win_trades': len(wins),
+            'lose_trades': len(losses),
+            'avg_win': round(total_win / len(wins), 2) if wins else 0,
+            'avg_loss': round(sum(losses) / len(losses), 2) if losses else 0,
+            'best_trade': round(max(pnls), 2) if pnls else 0,
+            'worst_trade': round(min(pnls), 2) if pnls else 0,
             'max_consec_win': max_consec_win,
             'max_consec_loss': max_consec_loss,
             'profit_factor': round(profit_factor, 2),

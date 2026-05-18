@@ -341,8 +341,8 @@ tr:hover { background: #102f5f; }
             <div class="mini-stat"><span class="label">Steps:</span><span class="value">{{ state.rl_stats.get('train_steps', 0) }}</span></div>
             <div class="mini-stat"><span class="label">Buffer:</span><span class="value">{{ state.rl_stats.get('buffer_size', 0) }}</span></div>
             <div class="mini-stat"><span class="label">Loss:</span><span class="value">{{ "%.4f"|format(state.rl_stats.get('avg_loss', 0)) }}</span></div>
-            <div class="mini-stat"><span class="label">Q:</span><span class="value">{{ "%.3f"|format(state.rl_stats.get('avg_q_value', 0)) }}</span></div>
-            <div class="mini-stat"><span class="label">Reward:</span><span class="value {{ 'pnl-pos' if state.rl_stats.get('total_reward', 0) >= 0 else 'pnl-neg' }}">{{ "%.1f"|format(state.rl_stats.get('total_reward', 0)) }}</span></div>
+            <div class="mini-stat"><span class="label">Q:</span><span class="value">{% if state.rl_stats.get('avg_q_value') is none %}N/A{% else %}{{ "%.3f"|format(state.rl_stats.get('avg_q_value')) }}{% endif %}</span></div>
+            <div class="mini-stat"><span class="label">RL Reward:</span><span class="value {{ 'pnl-pos' if state.rl_stats.get('total_reward', 0) >= 0 else 'pnl-neg' }}">{{ "%.1f"|format(state.rl_stats.get('total_reward', 0)) }}</span></div>
         </div>
     </div>
     <div class="card">

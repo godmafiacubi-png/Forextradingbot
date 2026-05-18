@@ -417,7 +417,7 @@ class TradingBot:
                     if ticket not in self.active_trades:
                         continue
 
-                    del self.active_trades[ticket]
+                    active_meta = self.active_trades.pop(ticket)
 
                     self.risk_guard.record_trade_result(pnl)
                     self.adaptive_threshold.record_result(is_win)
@@ -439,7 +439,7 @@ class TradingBot:
                         }
 
                     # ---- hub.on_trade_close() — อัปเดต RL + Meta + Retrain ทีเดียว ----
-                    self.hub.on_trade_close(
+                    rl_result = self.hub.on_trade_close(
                         symbol=prev.symbol,
                         pnl=pnl,
                         pnl_pct=pnl_pct,
@@ -447,6 +447,19 @@ class TradingBot:
                         market_data=sym_data_c,
                         signal_data=sig_data_c,
                     )
+                    if rl_result:
+                        self.trade_journal.log_rl_trade_result(
+                            ticket, prev.symbol, side, pnl=pnl,
+                            rl_reward=rl_result.get('rl_reward'),
+                            q_value=rl_result.get('q_value'),
+                            action=rl_result.get('action'),
+                            confidence=active_meta.get('confidence'),
+                            comment=(
+                                f"pnl={pnl:.2f} rl_reward={rl_result.get('rl_reward')} "
+                                f"q_value={rl_result.get('q_value')} action={rl_result.get('action')} "
+                                f"confidence={active_meta.get('confidence')}"
+                            ),
+                        )
 
                     result = "WIN" if is_win else "LOSS"
                     ai = self.mt5.get_account_info()

@@ -30,6 +30,10 @@ JOURNAL_FIELDS = [
     "regime",
     "session",
     "reason",
+    "source",
+    "rl_reward",
+    "q_value",
+    "action",
     "comment",
 ]
 
@@ -90,6 +94,10 @@ class TradeJournal:
                     regime TEXT,
                     session TEXT,
                     reason TEXT,
+                    source TEXT,
+                    rl_reward REAL,
+                    q_value REAL,
+                    action TEXT,
                     comment TEXT
                 )
                 """
@@ -105,6 +113,10 @@ class TradeJournal:
                 ("regime", "TEXT"),
                 ("session", "TEXT"),
                 ("reason", "TEXT"),
+                ("source", "TEXT"),
+                ("rl_reward", "REAL"),
+                ("q_value", "REAL"),
+                ("action", "TEXT"),
             ):
                 if field not in existing:
                     conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {field} {sql_type}")
@@ -112,7 +124,8 @@ class TradeJournal:
     def append_event(self, event_type, ticket=None, symbol="", side="", volume=None,
                      price=None, sl=None, tp=None, pnl=None, balance=None, equity=None,
                      spread=None, slippage_points=None, confidence=None, risk_pct=None,
-                     regime="", session="", reason="", comment=""):
+                     regime="", session="", reason="", source="", rl_reward=None,
+                     q_value=None, action="", comment=""):
         row = {
             "event_time": self._now_iso(),
             "event_type": event_type,
@@ -133,6 +146,10 @@ class TradeJournal:
             "regime": regime or "",
             "session": session or "",
             "reason": reason or "",
+            "source": source or "",
+            "rl_reward": rl_reward,
+            "q_value": q_value,
+            "action": "" if action is None else str(action),
             "comment": comment or "",
         }
         if self.csv_path:
@@ -183,6 +200,12 @@ class TradeJournal:
     def log_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment="", **context):
         return self.append_event(EVENT_CLOSE, ticket, symbol, side, volume, price, None, None, pnl,
                                  comment=comment, **context)
+
+    def log_rl_trade_result(self, ticket, symbol="", side="", pnl=None, rl_reward=None, q_value=None,
+                            action="", confidence=None, comment="", **context):
+        return self.append_event("RL_TRADE_RESULT", ticket, symbol, side, pnl=pnl,
+                                 confidence=confidence, source="deep_rl", rl_reward=rl_reward,
+                                 q_value=q_value, action=action, comment=comment, **context)
 
     def log_risk_blocked(self, symbol, side="", volume=None, price=None, sl=None, tp=None, comment="", **context):
         return self.append_event(EVENT_RISK_BLOCKED, symbol=symbol, side=side, volume=volume,

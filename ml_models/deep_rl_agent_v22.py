@@ -344,6 +344,7 @@ class DeepRLTradingAgent:
         # Metrics
         self.losses = deque(maxlen=100)
         self.q_values = deque(maxlen=100)
+        self.last_q_value_by_symbol = {}
         self.td_errors = deque(maxlen=100)
         self.symbol_performance = defaultdict(lambda: {
             "trades": 0, "wins": 0, "total_pnl": 0, "rewards": []
@@ -462,8 +463,11 @@ class DeepRLTradingAgent:
             else:
                 q_values = self.policy_net(state_t)
             self.policy_net.train()
+            selected_action = q_values.argmax(dim=1).item()
+            selected_q = q_values[0, selected_action].item()
             self.q_values.append(q_values.mean().item())
-            return q_values.argmax(dim=1).item()
+            self.last_q_value_by_symbol[symbol or "__default__"] = selected_q
+            return selected_action
 
     # ----------------------------------------------------------
     # RL power scaling (smooth sigmoid curve)
@@ -610,6 +614,15 @@ class DeepRLTradingAgent:
             if hasattr(self.target_net, "reset_noise"):
                 self.target_net.reset_noise()
 
+        return {
+            "source": "deep_rl",
+            "symbol": symbol,
+            "pnl": pnl,
+            "rl_reward": reward,
+            "q_value": self.last_q_value_by_symbol.get(symbol, self.last_q_value_by_symbol.get("__default__")),
+            "action": action,
+        }
+
     def record_hold_reward(self, symbol, state, had_signal):
         if self.reward_calculator and self.regime_detector:
             regime = self.regime_detector.current_regime.get(symbol, {}).get("regime", "QUIET")
@@ -712,7 +725,7 @@ class DeepRLTradingAgent:
     def get_stats(self) -> Dict:
         wr = self.total_wins / max(self.total_trades, 1)
         avg_loss = np.mean(self.losses) if self.losses else 0
-        avg_q = np.mean(self.q_values) if self.q_values else 0
+        avg_q = np.mean(self.q_values) if self.q_values else None
         avg_td = np.mean(np.abs(self.td_errors)) if self.td_errors else 0
         rl_power = self._get_rl_power()
 
@@ -735,7 +748,7 @@ class DeepRLTradingAgent:
             "win_rate": round(wr, 4),
             "total_reward": round(self.total_reward, 2),
             "avg_loss": round(avg_loss, 6),
-            "avg_q_value": round(avg_q, 4),
+            "avg_q_value": round(avg_q, 4) if avg_q is not None else None,
             "avg_td_error": round(avg_td, 4),
             "train_steps": self.train_step,
             "total_frames": self.total_frames,
