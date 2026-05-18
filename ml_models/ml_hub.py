@@ -387,13 +387,15 @@ class MLHub:
         market_data = market_data or {}
         signal_data = signal_data or {}
 
+        rl_result = None
+
         # RL
         if self.rl:
             next_state = self.rl.build_state(
                 market_data, signal_data, False, 0.0, symbol
             )
             buf_before = len(self.rl.replay_buffer) if self.rl.replay_buffer else 0
-            self.rl.record_trade_close(symbol, next_state, pnl, pnl_pct, equity)
+            rl_result = self.rl.record_trade_close(symbol, next_state, pnl, pnl_pct, equity)
             buf_after = len(self.rl.replay_buffer) if self.rl.replay_buffer else 0
             logger.info(
                 f"[MLHub] on_trade_close {symbol} pnl={pnl:.2f} "
@@ -424,6 +426,7 @@ class MLHub:
         logger.debug(
             f"[MLHub] Trade closed: {symbol} pnl=${pnl:.2f} ({pnl_pct:.2%})"
         )
+        return rl_result
 
     def on_hold(self, symbol: str, had_signal: bool, market_data: Dict,
                 signal_data: Dict):

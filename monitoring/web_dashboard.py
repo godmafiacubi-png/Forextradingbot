@@ -116,7 +116,9 @@ class _DashboardHandler(BaseHTTPRequestHandler):
         logger.debug("Default dashboard: " + format, *args)
 
 
-def _format_number(value: Any, decimals: int = 2) -> str:
+def _format_number(value: Any, decimals: int = 2, na: str | None = None) -> str:
+    if value in (None, '') and na is not None:
+        return na
     try:
         return f"{float(value):,.{decimals}f}"
     except (TypeError, ValueError):
@@ -406,7 +408,7 @@ def _render_html() -> str:
   </div>
 
   <div class="grid-3">
-    <div class="card"><h2>🧠 Deep RL Agent</h2><div class="mini-stats">{_mini_stat('Arch:', rl.get('architecture', 'Dueling_DQN'), 'neutral')}{_mini_stat('Trades:', rl.get('total_trades', 0))}{_mini_stat('WR:', _pct(rl.get('win_rate', 0)), 'pnl-pos' if _as_float(rl.get('win_rate', 0)) >= .5 else '')}{_mini_stat('Steps:', rl.get('train_steps', 0))}{_mini_stat('Buffer:', rl.get('buffer_size', 0))}{_mini_stat('Loss:', _format_number(rl.get('avg_loss', 0), 4))}{_mini_stat('Q:', _format_number(rl.get('avg_q_value', 0), 3))}{_mini_stat('Reward:', _format_number(rl.get('total_reward', 0), 1), signed_class(rl.get('total_reward', 0)).replace('positive','pnl-pos').replace('negative','pnl-neg'))}</div></div>
+    <div class="card"><h2>🧠 Deep RL Agent</h2><div class="mini-stats">{_mini_stat('Arch:', rl.get('architecture', 'Dueling_DQN'), 'neutral')}{_mini_stat('Trades:', rl.get('total_trades', 0))}{_mini_stat('WR:', _pct(rl.get('win_rate', 0)), 'pnl-pos' if _as_float(rl.get('win_rate', 0)) >= .5 else '')}{_mini_stat('Steps:', rl.get('train_steps', 0))}{_mini_stat('Buffer:', rl.get('buffer_size', 0))}{_mini_stat('Loss:', _format_number(rl.get('avg_loss', 0), 4))}{_mini_stat('Q:', _format_number(rl.get('avg_q_value'), 3, na='N/A'))}{_mini_stat('RL Reward:', _format_number(rl.get('total_reward', 0), 1), signed_class(rl.get('total_reward', 0)).replace('positive','pnl-pos').replace('negative','pnl-neg'))}</div></div>
     <div class="card"><h2>🌍 Market Regimes</h2><div class="mini-stats">{_render_regimes()}</div></div>
     <div class="card"><h2>🛡️ Risk Guard</h2><div class="mini-stats">{_mini_stat('Daily:', _money(daily_pnl), signed_class(daily_pnl).replace('positive','pnl-pos').replace('negative','pnl-neg'))}{_mini_stat('W:', risk.get('daily_wins', 0) if isinstance(risk, dict) else 0, 'pnl-pos')}{_mini_stat('L:', risk.get('daily_losses', 0) if isinstance(risk, dict) else 0, 'pnl-neg')}{_mini_stat('DD:', _pct(risk.get('drawdown_pct', 0) if isinstance(risk, dict) else 0, scale_unit_interval=False, decimals=1))}</div></div>
   </div>

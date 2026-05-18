@@ -30,6 +30,7 @@ class OrderManager:
         self._slippage_cooldowns = {}
 
     def _journal_event(self, method_name, *args, **kwargs):
+        kwargs.setdefault("source", "order_manager")
         if self.trade_journal is None:
             return None
         try:
@@ -209,7 +210,7 @@ class OrderManager:
                 logger.warning(f"[SKIP] {symbol} {side} {message} ({cooldown_remaining:.0f}s remaining)")
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
-                    reason=message, comment=message,
+                    reason=message, comment=message, source="order_manager",
                 )
                 return None
 
@@ -242,7 +243,7 @@ class OrderManager:
                     self._start_slippage_cooldown(symbol, side)
                     self._journal_event(
                         "log_order_rejected", symbol, side=side, volume=volume, price=price,
-                        sl=stop_loss, tp=take_profit, comment=message,
+                        sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
                     )
                     return None
             digits = self._get_digits(symbol)
@@ -273,7 +274,7 @@ class OrderManager:
                 logger.error(f"[SKIP] {symbol} {side} {message}")
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
-                    sl=stop_loss, tp=take_profit, comment=message,
+                    sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
                 )
                 return None
 
@@ -287,7 +288,7 @@ class OrderManager:
                 logger.error(message)
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
-                    sl=stop_loss, tp=take_profit, comment=message,
+                    sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
                 )
                 return None
 
@@ -306,7 +307,7 @@ class OrderManager:
             )
             self._journal_event(
                 "log_order_attempt", symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment,
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager",
             )
             result = self._send_order(request, f"would place {side} {symbol} {volume} lots")
             if self.dry_run:
@@ -318,18 +319,18 @@ class OrderManager:
                 logger.error(f"Order failed [{retcode}]: {error_msg}")
                 self._journal_event(
                     "log_order_failed", symbol, side=side, volume=volume, price=price,
-                    sl=stop_loss, tp=take_profit, comment=message,
+                    sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
                 )
                 return None
 
             logger.info(f"[TRADE] {side} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
             self._journal_event(
                 "log_order_filled", result.order, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment,
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager",
             )
             self._journal_event(
                 "log_open", result.order, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment,
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager",
             )
             return result.order
         except Exception as e:
