@@ -1125,7 +1125,16 @@ class TradingBot:
                 logger.info("=" * 80)
                 logger.info(f"[ITER {self.iteration}] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  {BOT_MODE}  Sess: {','.join(self._get_session_name())}")
                 logger.info(f"  Equity: ${ai['equity']:.2f} ({growth:+.1f}%) | Daily: ${self.daily_pnl:.2f} T:{self.daily_trades}")
-                logger.info(f"  DeepRL: steps={rl['train_steps']} buf={rl['buffer_size']} loss={rl['avg_loss']:.6f} Q={rl['avg_q_value']:.3f} power={rl.get('rl_power',0):.0%}")
+                q_value = rl.get('avg_q_value')
+                q_text = "N/A" if q_value is None else f"{q_value:.3f}"
+                logger.info(
+                    "  DeepRL: steps=%s buf=%s loss=%.6f Q=%s power=%.0f%%",
+                    rl.get('train_steps', 0),
+                    rl.get('buffer_size', 0),
+                    float(rl.get('avg_loss') or 0.0),
+                    q_text,
+                    float(rl.get('rl_power', 0) or 0.0) * 100,
+                )
                 logger.info(f"  Regimes: {rl.get('regimes', {})}")
                 logger.info(f"  Adaptive: thresh={at['current']:.0%} WR={at['recent_wr']:.0%} | Streak: {ls['current_streak']} {'COOLDOWN' if ls['in_cooldown'] else ''}")
                 logger.info(f"  Quality: A+:{self.quality_stats.get('A+',0)} A:{self.quality_stats.get('A',0)} B:{self.quality_stats.get('B',0)} blocked:{self.quality_stats.get('blocked',0)} (min={MIN_QUALITY_SCORE})")
