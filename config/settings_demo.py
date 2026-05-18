@@ -7,10 +7,10 @@ separate MT5 demo execution path and explicitly disables DRY_RUN in code/tests.
 PROFILE_NAME = "demo"
 PROFILE_OVERRIDES = {
     "PROFILE_NAME": PROFILE_NAME,
-    "DRY_RUN": True,
-    "LIVE_TRADING_CONFIRMED": False,
+    "DRY_RUN": False,
+    "LIVE_TRADING_CONFIRMED": True,
     "ACCOUNT_RISK_PERCENT": 0.5,
-    "MAX_OPEN_TRADES": 3,
+    "MAX_OPEN_TRADES": 5,
     "MAX_TRADES_PER_SYMBOL": 1,
     "MAX_INTRADAY_EQUITY_DRAWDOWN_PCT": 3.0,
     "MAX_CONSECUTIVE_ORDER_FAILURES": 3,

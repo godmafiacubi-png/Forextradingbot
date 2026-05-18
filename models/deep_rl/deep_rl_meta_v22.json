@@ -1,18 +1,26 @@
 {
   "version": "2.2",
   "use_cross_symbol": true,
-  "train_step": 625,
-  "total_frames": 6455,
-  "total_trades": 0,
-  "total_wins": 0,
-  "total_reward": 0.0,
-  "global_epsilon": 1.0,
-  "symbol_epsilon": {},
-  "action_counts": {
-    "1": 2203,
-    "0": 2065,
-    "2": 2187
+  "train_step": 2338,
+  "total_frames": 23720,
+  "total_trades": 3,
+  "total_wins": 1,
+  "total_reward": -6.738184265629675,
+  "global_epsilon": 0.998,
+  "symbol_epsilon": {
+    "GBPUSD": 0.998
   },
-  "symbol_performance": {},
-  "saved_at": "2026-05-15T23:53:32.504454"
+  "action_counts": {
+    "1": 7988,
+    "0": 7833,
+    "2": 7899
+  },
+  "symbol_performance": {
+    "GBPUSD": {
+      "trades": 1,
+      "wins": 1,
+      "total_pnl": 11.06
+    }
+  },
+  "saved_at": "2026-05-18T19:13:31.847939"
 }

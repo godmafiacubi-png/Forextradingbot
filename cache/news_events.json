@@ -16,5 +16,23 @@
     "currency": "USD",
     "title": "NFP / Non-Farm Payrolls",
     "impact": "HIGH"
+  },
+  {
+    "time": "2026-05-27 18:00",
+    "currency": "USD",
+    "title": "FOMC Minutes / Rate Decision",
+    "impact": "HIGH"
+  },
+  {
+    "time": "2026-05-28 12:30",
+    "currency": "USD",
+    "title": "Unemployment Claims",
+    "impact": "HIGH"
+  },
+  {
+    "time": "2026-05-29 12:30",
+    "currency": "USD",
+    "title": "NFP / Non-Farm Payrolls",
+    "impact": "HIGH"
   }
 ]
