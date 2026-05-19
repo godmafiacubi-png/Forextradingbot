@@ -1042,9 +1042,22 @@ class TradingBot:
             )
 
             max_slippage = MAX_SLIPPAGE_POINTS.get(symbol, DEFAULT_MAX_SLIPPAGE_POINTS)
+            diagnostics = {
+                'entry_strategy': entry_strategy,
+                'strategy_confidence': round(float(strategy_conf), 4),
+                'quality_score': quality_score,
+                'quality_grade': quality_grade,
+                'ml_prob': round(float(ml_prob), 4),
+                'ict_score': ict_score,
+                'adx': round(float(adx), 2),
+                'rsi': round(float(rsi), 2),
+                'regime': regime_name,
+                'session': session_str,
+                'planned_rr': round(float(planned_rr), 4),
+            }
             ticket = self.order_manager.place_order(
                 symbol, ot, lot, sl, tp, f"v71_{signal_name}_{quality_grade}_{regime_name[:3]}",
-                reference_price=price, max_slippage_points=max_slippage
+                reference_price=price, max_slippage_points=max_slippage, diagnostics=diagnostics
             )
 
             if ticket:
