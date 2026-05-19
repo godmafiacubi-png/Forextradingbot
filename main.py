@@ -689,14 +689,19 @@ class TradingBot:
             sym_min_conf = sym_cfg['min_confidence']
             sym_min_adx = sym_cfg['min_adx']
             sym_min_ict = sym_cfg['min_ict_score']
-            sym_ml_buy = sym_cfg['ml_buy_threshold']
-            sym_ml_sell = sym_cfg['ml_sell_threshold']
+            if DRY_RUN:
+                sym_ml_buy = sym_cfg['ml_buy_threshold']
+                sym_ml_sell = sym_cfg['ml_sell_threshold']
+            else:
+                sym_ml_buy = sym_cfg.get('live_ml_buy_threshold', sym_cfg['ml_buy_threshold'])
+                sym_ml_sell = sym_cfg.get('live_ml_sell_threshold', sym_cfg['ml_sell_threshold'])
             sym_rsi_buy_max = sym_cfg['pullback_rsi_buy_max']
             sym_rsi_sell_min = sym_cfg['pullback_rsi_sell_min']
             sym_require_htf = sym_cfg['require_htf']
             sym_require_pb = sym_cfg['require_pullback']
             sym_use_m30 = sym_cfg.get('use_m30', False)
             sym_m30_mode = sym_cfg.get('m30_confirmation', 'signal')
+            sym_min_quality = sym_cfg.get('min_quality_score', MIN_QUALITY_SCORE)
 
             df = self.fetch_and_process(symbol, timeframe)
             if df is None or len(df) == 0:
@@ -965,6 +970,9 @@ class TradingBot:
             elif not blocked:
                 self.m30_stats['disabled'] += 1
 
+            quiet_quality_penalty = 5 if regime_name == 'QUIET' else 0
+            effective_min_quality = sym_min_quality + quiet_quality_penalty
+
             quality_score = 0
             quality_grade = 'D'
             quality_icon = '🔴'
@@ -976,11 +984,14 @@ class TradingBot:
                 quality_grade, quality_icon = self.quality_scorer.get_grade(quality_score)
                 self.quality_stats[quality_grade] = self.quality_stats.get(quality_grade, 0) + 1
 
-                if quality_score < MIN_QUALITY_SCORE:
-                    blocked = f"Quality {quality_icon} {quality_grade} ({quality_score}<{MIN_QUALITY_SCORE})"
+                if quality_score < effective_min_quality:
+                    blocked = f"Quality {quality_icon} {quality_grade} ({quality_score}<{effective_min_quality})"
                     self.quality_stats['blocked'] += 1
 
-                logger.info(f"  │ Quality: {quality_icon} {quality_grade} ({quality_score}/100) min={MIN_QUALITY_SCORE}")
+                logger.info(
+                    f"  │ Quality: {quality_icon} {quality_grade} ({quality_score}/100) "
+                    f"min={effective_min_quality} (base={sym_min_quality}, quiet_penalty=+{quiet_quality_penalty})"
+                )
 
             logger.info(f"  │ Final: {signal_name} ({confidence:.2%})")
 
