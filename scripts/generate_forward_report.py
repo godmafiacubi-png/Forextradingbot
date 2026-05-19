@@ -103,6 +103,31 @@ class Report:
                 counts[row.get(field) or "UNKNOWN"] += 1
         return dict(sorted(counts.items()))
 
+    def _group_stats(self, field: str) -> dict[str, dict[str, float]]:
+        grouped: dict[str, list[float]] = defaultdict(list)
+        for row in self.rows:
+            if row.get("event_type") not in TRADE_EXIT_EVENTS:
+                continue
+            pnl = self._float(row.get("pnl"))
+            if pnl is None:
+                continue
+            grouped[row.get(field) or "UNKNOWN"].append(pnl)
+
+        result: dict[str, dict[str, float]] = {}
+        for key in sorted(grouped):
+            pnls = grouped[key]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_profit = sum(wins)
+            gross_loss = abs(sum(losses))
+            result[key] = {
+                "pnl": sum(pnls),
+                "win_rate": (len(wins) / len(pnls) * 100) if pnls else 0.0,
+                "profit_factor": (gross_profit / gross_loss) if gross_loss else None,
+                "trade_count": len(pnls),
+            }
+        return result
+
     def symbol_breakdown(self) -> dict[str, float]:
         return self._pnl_breakdown("symbol")
 
@@ -179,6 +204,12 @@ class Report:
             "symbol_trade_counts": self._trade_counts("symbol"),
             "session_trade_counts": self._trade_counts("session"),
             "regime_trade_counts": self._trade_counts("regime"),
+            "strategy_breakdown": self._group_stats("entry_strategy"),
+            "regime_stats_breakdown": self._group_stats("regime"),
+            "quality_breakdown": self._group_stats("quality_grade"),
+            "session_stats_breakdown": self._group_stats("session"),
+            "symbol_stats_breakdown": self._group_stats("symbol"),
+            "side_breakdown": self._group_stats("side"),
             "execution_failures": failure_count,
             "execution_failure_rate": self.execution_failure_rate(),
             "execution_failure_breakdown": {event: event_counts[event] for event in sorted(FAILURE_EVENTS)},
@@ -186,6 +217,8 @@ class Report:
             "spread_average": self.average_field("spread"),
             "confidence_average": self.average_field("confidence"),
             "risk_pct_average": self.average_field("risk_pct"),
+            "planned_rr_average": self.average_field("planned_rr"),
+            "execution_rr_average": self.average_field("execution_rr"),
         }
 
 
@@ -219,13 +252,26 @@ def render_report(metrics: dict[str, object]) -> str:
         "total_trades", "win_rate", "profit_factor", "net_pnl", "max_drawdown", "max_drawdown_pct",
         "daily_drawdown_pct", "avg_win", "avg_loss", "expectancy", "largest_loss", "consecutive_losses",
         "execution_failures", "execution_failure_rate", "slippage_average", "spread_average",
-        "confidence_average", "risk_pct_average",
+        "confidence_average", "risk_pct_average", "planned_rr_average", "execution_rr_average",
     ):
         lines.append(f"{key}: {fmt_number(metrics[key])}")
     lines.append("")
     lines.extend(render_breakdown("symbol_breakdown", metrics["symbol_breakdown"], metrics.get("symbol_trade_counts")))
     lines.extend(render_breakdown("session_breakdown", metrics["session_breakdown"], metrics.get("session_trade_counts")))
     lines.extend(render_breakdown("regime_breakdown", metrics["regime_breakdown"], metrics.get("regime_trade_counts")))
+    for key in ("strategy_breakdown", "regime_stats_breakdown", "quality_breakdown",
+                "session_stats_breakdown", "symbol_stats_breakdown", "side_breakdown"):
+        lines.append(f"{key}:")
+        section = metrics.get(key, {})
+        if not section:
+            lines.append("  n/a")
+            continue
+        for group, stats in section.items():
+            lines.append(
+                "  "
+                f"{group}: pnl={fmt_number(stats['pnl'])}, win_rate={fmt_number(stats['win_rate'])}, "
+                f"pf={fmt_number(stats['profit_factor'])}, trades={int(stats['trade_count'])}"
+            )
     lines.append("execution_failure_breakdown:")
     for event, count in metrics["execution_failure_breakdown"].items():
         lines.append(f"  {event}: {count}")

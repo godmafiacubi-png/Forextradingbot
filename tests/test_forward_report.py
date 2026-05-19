@@ -18,6 +18,12 @@ def test_forward_report_summarizes_edge_and_execution_metrics():
             "tp": "",
             "pnl": "100",
             "comment": "slippage_points=1.5",
+            "entry_strategy": "breakout_retest",
+            "regime": "TRENDING",
+            "quality_grade": "A",
+            "session": "London",
+            "planned_rr": "2.2",
+            "execution_rr": "2.0",
         },
         {
             "event_time": "2026-01-01T14:00:00+00:00",
@@ -31,6 +37,12 @@ def test_forward_report_summarizes_edge_and_execution_metrics():
             "tp": "",
             "pnl": "-40",
             "comment": "slippage_points=2.5",
+            "entry_strategy": "ranging_mean_reversion",
+            "regime": "RANGING",
+            "quality_grade": "B",
+            "session": "NewYork",
+            "planned_rr": "2.8",
+            "execution_rr": "1.7",
         },
         {
             "event_time": "2026-01-01T15:00:00+00:00",
@@ -59,7 +71,13 @@ def test_forward_report_summarizes_edge_and_execution_metrics():
     assert metrics["symbol_breakdown"] == {"EURUSDm": 100.0, "XAUUSDm": -40.0}
     assert metrics["session_breakdown"] == {"London": 100.0, "NewYork": -40.0}
     assert metrics["slippage_average"] == 2.0
+    assert metrics["planned_rr_average"] == 2.5
+    assert metrics["execution_rr_average"] == 1.85
+    assert metrics["strategy_breakdown"]["breakout_retest"]["trade_count"] == 1
+    assert metrics["quality_breakdown"]["A"]["pnl"] == 100.0
+    assert metrics["side_breakdown"]["BUY"]["win_rate"] == 100.0
     assert "Forward Performance Report" in render_report(metrics)
+    assert "strategy_breakdown:" in render_report(metrics)
 
 
 def test_forward_report_loads_trade_journal_csv(tmp_path):

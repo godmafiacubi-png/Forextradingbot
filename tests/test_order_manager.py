@@ -166,6 +166,9 @@ def test_place_order_writes_execution_journal_events(monkeypatch, tmp_path):
     assert "execution_price=1.1002" in rows[0]["comment"]
     assert "rr=1.50" in rows[0]["comment"]
     assert rows[0]["entry_strategy"] == "regime_adaptive_entry"
+    assert rows[0]["regime"] == "QUIET"
+    assert rows[0]["session"] == "London"
+    assert rows[0]["quality_score"] == "82"
     assert rows[0]["quality_grade"] == "A"
     assert rows[0]["planned_rr"] == "2.5"
     assert float(rows[0]["execution_rr"]) == pytest.approx(1.5, abs=1e-6)
