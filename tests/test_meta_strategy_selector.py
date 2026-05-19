@@ -183,3 +183,89 @@ def test_quiet_baseline_breakout_blocked_without_sweep():
     selected = MetaStrategySelector().apply(df).iloc[0]
     assert selected["entry_strategy"] == "none"
     assert selected["signal"] == 0
+
+
+def test_baseline_buy_near_resistance_is_blocked():
+    df = _frame([
+        {
+            "signal": 1,
+            "confidence": 0.72,
+            "ict_score": 3,
+            "near_supply_ob": 0.002,
+            "ml_probability": 0.70,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        }
+    ])
+
+    selected = MetaStrategySelector().apply(df).iloc[0]
+
+    assert selected["base_signal"] == 1
+    assert selected["signal"] == 0
+    assert selected["entry_strategy"] == "none"
+
+
+def test_baseline_sell_near_support_is_blocked():
+    df = _frame([
+        {
+            "signal": -1,
+            "confidence": 0.72,
+            "ict_score": 3,
+            "near_demand_ob": 0.002,
+            "ml_probability": 0.30,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        }
+    ])
+
+    selected = MetaStrategySelector().apply(df).iloc[0]
+
+    assert selected["base_signal"] == -1
+    assert selected["signal"] == 0
+    assert selected["entry_strategy"] == "none"
+
+
+def test_breakout_buy_near_resistance_passes_with_confirmation():
+    df = _frame([
+        {"bos_bullish": 1, "adx": 30, "structure": 1, "htf_trend": 1},
+        {
+            "adx": 30,
+            "min_adx": 20,
+            "structure": 1,
+            "htf_trend": 1,
+            "near_supply_ob": 0.002,
+            "near_demand_ob": 0.002,
+            "bos_bullish": 1,
+            "ml_probability": 0.71,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        },
+    ])
+
+    selected = MetaStrategySelector().apply(df).iloc[1]
+
+    assert selected["signal"] == 1
+    assert selected["entry_strategy"] in {"regime_adaptive_entry", "breakout_retest"}
+
+
+def test_breakout_sell_near_support_passes_with_confirmation():
+    df = _frame([
+        {"bos_bearish": 1, "adx": 30, "structure": -1, "htf_trend": -1},
+        {
+            "adx": 30,
+            "min_adx": 20,
+            "structure": -1,
+            "htf_trend": -1,
+            "near_demand_ob": 0.002,
+            "near_supply_ob": 0.002,
+            "bos_bearish": 1,
+            "ml_probability": 0.29,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        },
+    ])
+
+    selected = MetaStrategySelector().apply(df).iloc[1]
+
+    assert selected["signal"] == -1
+    assert selected["entry_strategy"] in {"regime_adaptive_entry", "breakout_retest"}
