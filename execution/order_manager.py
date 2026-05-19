@@ -202,7 +202,7 @@ class OrderManager:
         return mt5.order_send(request)
 
     def place_order(self, symbol, order_type, volume, stop_loss, take_profit, comment="",
-                    reference_price=None, max_slippage_points=None):
+                    reference_price=None, max_slippage_points=None, diagnostics=None):
         try:
             side = self._side_label(order_type)
             cooldown_remaining = self._slippage_cooldown_remaining(symbol, side)
@@ -306,9 +306,11 @@ class OrderManager:
                 f"execution_price={price:.{digits}f} SL={stop_loss:.{digits}f} "
                 f"TP={take_profit:.{digits}f} R:R=1:{rr:.2f}"
             )
+            journal_context = dict(diagnostics or {})
+            journal_context.setdefault("execution_rr", rr)
             self._journal_event(
                 "log_order_attempt", symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager",
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
             )
             result = self._send_order(request, f"would place {side} {symbol} {volume} lots")
             if self.dry_run:
@@ -327,11 +329,11 @@ class OrderManager:
             logger.info(f"[TRADE] {side} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
             self._journal_event(
                 "log_order_filled", result.order, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager",
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
             )
             self._journal_event(
                 "log_open", result.order, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager",
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
             )
             return result.order
         except Exception as e:

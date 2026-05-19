@@ -213,8 +213,9 @@ class RegimeAdaptiveEntryStrategy:
 class MetaStrategySelector:
     """Blend baseline ICT/ML signals with specialised regime-aware entries."""
 
-    def __init__(self, min_alt_confidence=0.57, override_margin=0.12):
+    def __init__(self, min_alt_confidence=0.57, override_margin=0.12, quiet_min_alt_confidence=0.64):
         self.min_alt_confidence = min_alt_confidence
+        self.quiet_min_alt_confidence = quiet_min_alt_confidence
         self.override_margin = override_margin
         self.ranging = RangingMeanReversionStrategy()
         self.breakout = BreakoutRetestStrategy()
@@ -258,6 +259,7 @@ class MetaStrategySelector:
 
     def select(self, df, index):
         row = df.iloc[index]
+        regime = normalize_regime_name(row.get("regime", row.get("market_regime", row.get("htf_regime", "GLOBAL"))))
         base = self._base_candidate(row)
         candidates = [c for c in (
             base,
@@ -283,7 +285,8 @@ class MetaStrategySelector:
             ).clipped()
 
         if base is not None and best.signal != base.signal:
-            if best.confidence >= base.confidence + self.override_margin and best.confidence >= self.min_alt_confidence:
+            min_alt_conf = self.quiet_min_alt_confidence if regime == "QUIET" else self.min_alt_confidence
+            if best.confidence >= base.confidence + self.override_margin and best.confidence >= min_alt_conf:
                 return EntryCandidate(
                     best.signal,
                     best.confidence,
@@ -299,7 +302,8 @@ class MetaStrategySelector:
                 "baseline and adaptive entries conflict",
             )
 
-        if best.confidence >= self.min_alt_confidence:
+        min_alt_conf = self.quiet_min_alt_confidence if regime == "QUIET" else self.min_alt_confidence
+        if best.confidence >= min_alt_conf:
             return best.clipped()
         return EntryCandidate(0, 0.0, best.ict_score, "meta_low_confidence", "adaptive entry below confidence floor")
 

@@ -691,6 +691,9 @@ class TradingBot:
             sym_min_ict = sym_cfg['min_ict_score']
             sym_ml_buy = sym_cfg['ml_buy_threshold']
             sym_ml_sell = sym_cfg['ml_sell_threshold']
+            sym_min_quality_score = sym_cfg.get('min_quality_score', MIN_QUALITY_SCORE)
+            sym_live_ml_buy = sym_cfg.get('live_ml_buy_threshold', sym_ml_buy)
+            sym_live_ml_sell = sym_cfg.get('live_ml_sell_threshold', sym_ml_sell)
             sym_rsi_buy_max = sym_cfg['pullback_rsi_buy_max']
             sym_rsi_sell_min = sym_cfg['pullback_rsi_sell_min']
             sym_require_htf = sym_cfg['require_htf']
@@ -897,6 +900,8 @@ class TradingBot:
             # Quiet market kill switch — no edge in flat market
             elif regime_name == 'QUIET' and adx < QUIET_MARKET_ADX_THRESHOLD:
                 blocked = f"QUIET_MARKET (ADX={adx:.1f}<{QUIET_MARKET_ADX_THRESHOLD})"
+            elif regime_name == 'QUIET' and strategy_conf < 0.62:
+                blocked = f"QUIET strategy confidence {strategy_conf:.2%}<62%"
             elif confidence < effective_conf_thresh:
                 blocked = f"conf {confidence:.2%}<{effective_conf_thresh:.0%}"
             elif adx < adjusted_adx_thresh:
@@ -976,11 +981,12 @@ class TradingBot:
                 quality_grade, quality_icon = self.quality_scorer.get_grade(quality_score)
                 self.quality_stats[quality_grade] = self.quality_stats.get(quality_grade, 0) + 1
 
-                if quality_score < MIN_QUALITY_SCORE:
-                    blocked = f"Quality {quality_icon} {quality_grade} ({quality_score}<{MIN_QUALITY_SCORE})"
+                effective_min_quality = sym_min_quality_score + (5 if regime_name == 'QUIET' else 0)
+                if quality_score < effective_min_quality:
+                    blocked = f"Quality {quality_icon} {quality_grade} ({quality_score}<{effective_min_quality})"
                     self.quality_stats['blocked'] += 1
 
-                logger.info(f"  │ Quality: {quality_icon} {quality_grade} ({quality_score}/100) min={MIN_QUALITY_SCORE}")
+                logger.info(f"  │ Quality: {quality_icon} {quality_grade} ({quality_score}/100) min={effective_min_quality}")
 
             logger.info(f"  │ Final: {signal_name} ({confidence:.2%})")
 
@@ -1044,7 +1050,20 @@ class TradingBot:
             max_slippage = MAX_SLIPPAGE_POINTS.get(symbol, DEFAULT_MAX_SLIPPAGE_POINTS)
             ticket = self.order_manager.place_order(
                 symbol, ot, lot, sl, tp, f"v71_{signal_name}_{quality_grade}_{regime_name[:3]}",
-                reference_price=price, max_slippage_points=max_slippage
+                reference_price=price, max_slippage_points=max_slippage,
+                diagnostics={
+                    "entry_strategy": entry_strategy,
+                    "strategy_confidence": strategy_conf,
+                    "quality_score": quality_score,
+                    "quality_grade": quality_grade,
+                    "ml_prob": ml_prob,
+                    "ict_score": ict_score,
+                    "adx": adx,
+                    "rsi": rsi,
+                    "regime": regime_name,
+                    "session": session_str,
+                    "planned_rr": planned_rr,
+                }
             )
 
             if ticket:
@@ -1229,3 +1248,16 @@ if __name__ == "__main__":
         import traceback
         logger.error(traceback.format_exc())
         sys.exit(1)
+            if not DRY_RUN:
+                sym_ml_buy = sym_live_ml_buy
+                sym_ml_sell = sym_live_ml_sell
+
+            if not blocked and regime_name == 'QUIET':
+                allowed = entry_strategy in {"ranging_mean_reversion", "regime_adaptive_entry"}
+                has_sweep = bool(latest.get('liq_sweep_low', 0) or latest.get('liq_sweep_high', 0))
+                htf_strong = abs(int(latest.get('htf_trend', 0))) >= 1 and adx >= max(28, sym_min_adx + 4)
+                if not allowed:
+                    if not htf_strong:
+                        blocked = f"QUIET blocks {entry_strategy} without strong ADX+HTF"
+                elif not has_sweep:
+                    blocked = "QUIET requires liquidity sweep confirmation"
