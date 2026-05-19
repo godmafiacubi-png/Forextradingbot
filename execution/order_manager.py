@@ -28,6 +28,7 @@ class OrderManager:
                 slippage_cooldown_seconds = 600
         self.slippage_cooldown_seconds = max(0, float(slippage_cooldown_seconds))
         self._slippage_cooldowns = {}
+        self._partial_close_stages = {}
 
     def _journal_event(self, method_name, *args, **kwargs):
         kwargs.setdefault("source", "order_manager")
@@ -337,6 +338,19 @@ class OrderManager:
             logger.error(f"Place order error: {e}")
             return None
 
+    def _min_sl_modify_distance(self, symbol):
+        try:
+            info = mt5.symbol_info(symbol)
+            if info is None:
+                return 0.0
+            point = float(getattr(info, "point", 0) or 0)
+            stops = float(getattr(info, "trade_stops_level", 0) or 0)
+            if point <= 0:
+                return 0.0
+            return max(point, stops * point)
+        except Exception:
+            return 0.0
+
     def modify_sl(self, ticket, new_sl):
         """Modify SL — ใช้โดย SmartTrailingV2"""
         try:
@@ -362,6 +376,14 @@ class OrderManager:
             if si:
                 current_price = si['bid'] if pos.type == 0 else si['ask']
                 new_sl, _ = self._check_stop_level(pos.symbol, current_price, new_sl, pos.tp, pos.type)
+
+            min_distance = self._min_sl_modify_distance(pos.symbol)
+            if pos.sl > 0 and abs(new_sl - pos.sl) < min_distance:
+                logger.debug(
+                    f"[MODIFY] #{ticket} {pos.symbol} delta={abs(new_sl - pos.sl):.{digits}f} "
+                    f"below min_distance={min_distance:.{digits}f} SKIP"
+                )
+                return False
 
             return self._modify_sl(pos, new_sl)
         except Exception as e:
@@ -451,9 +473,17 @@ class OrderManager:
             logger.error(f"_modify_sl error: {e}")
             return False
 
-    def partial_close(self, ticket, close_pct):
+    def partial_close(self, ticket, close_pct, stage=None):
         """Close a percentage of an open position"""
         try:
+            stage_label = None if stage is None else str(stage)
+            if stage_label:
+                ticket_key = str(ticket)
+                done = self._partial_close_stages.setdefault(ticket_key, set())
+                if stage_label in done:
+                    logger.debug(f"[PARTIAL] #{ticket} stage {stage_label} already executed, skip")
+                    return False
+
             position = mt5.positions_get(ticket=ticket)
             if not position:
                 return False
@@ -480,23 +510,37 @@ class OrderManager:
                 "action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol,
                 "volume": close_volume, "type": order_type,
                 "position": ticket, "price": price, "deviation": self.deviation,
-                "magic": self.magic, "comment": "partial_close",
+                "magic": self.magic, "comment": f"partial_close_s{stage_label}" if stage_label else "partial_close",
                 "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_IOC,
             }
 
             result = self._send_order(request, f"would partial close #{ticket} {close_volume} lots")
             if self.dry_run:
+                pnl = getattr(pos, "profit", None)
+                context = {"comment": f"dry-run partial close stage={stage_label}" if stage_label else "dry-run partial close", "pnl": pnl}
+                if pnl is None:
+                    context["reason"] = "pnl_unavailable"
+                    context["comment"] = "pnl_unavailable"
                 self._journal_event(
                     "log_partial_close", ticket, pos.symbol, self._position_side(pos), close_volume, price,
-                    comment="dry-run partial close",
+                    **context,
                 )
+                if stage_label:
+                    self._partial_close_stages.setdefault(str(ticket), set()).add(stage_label)
                 return True
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[PARTIAL] #{ticket} {pos.symbol} closed {close_volume}/{pos.volume} lots ({close_pct:.0%})")
+                pnl = getattr(pos, "profit", None)
+                context = {"comment": f"partial close stage={stage_label} {close_pct:.0%}" if stage_label else f"partial close {close_pct:.0%}", "pnl": pnl}
+                if pnl is None:
+                    context["reason"] = "pnl_unavailable"
+                    context["comment"] = "pnl_unavailable"
                 self._journal_event(
                     "log_partial_close", ticket, pos.symbol, self._position_side(pos), close_volume, price,
-                    comment=f"partial close {close_pct:.0%}",
+                    **context,
                 )
+                if stage_label:
+                    self._partial_close_stages.setdefault(str(ticket), set()).add(stage_label)
                 return True
             error_msg = result.comment if result else 'None'
             retcode = result.retcode if result else 0
@@ -586,16 +630,26 @@ class OrderManager:
             }
             r = self._send_order(request, f"would close #{ticket}")
             if self.dry_run:
+                pnl = getattr(pos, "profit", None)
+                context = {"comment": "dry-run close", "pnl": pnl}
+                if pnl is None:
+                    context["reason"] = "pnl_unavailable"
+                    context["comment"] = "pnl_unavailable"
                 self._journal_event(
                     "log_close", ticket, pos.symbol, self._position_side(pos), pos.volume, price,
-                    comment="dry-run close",
+                    **context,
                 )
                 return True
             if r and r.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[CLOSE] #{ticket} {pos.symbol}")
+                pnl = getattr(pos, "profit", None)
+                context = {"comment": "closed", "pnl": pnl}
+                if pnl is None:
+                    context["reason"] = "pnl_unavailable"
+                    context["comment"] = "pnl_unavailable"
                 self._journal_event(
                     "log_close", ticket, pos.symbol, self._position_side(pos), pos.volume, price,
-                    comment="closed",
+                    **context,
                 )
                 return True
             error_msg = r.comment if r else 'None'
