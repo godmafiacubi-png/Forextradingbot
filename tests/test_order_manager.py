@@ -142,6 +142,19 @@ def test_place_order_writes_execution_journal_events(monkeypatch, tmp_path):
     ticket = manager.place_order(
         "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.2, 1.099, 1.102, "journal-test",
         reference_price=1.10000, max_slippage_points=50,
+        diagnostics={
+            "entry_strategy": "regime_adaptive_entry",
+            "strategy_confidence": 0.77,
+            "quality_score": 82,
+            "quality_grade": "A",
+            "ml_prob": 0.63,
+            "ict_score": 3,
+            "adx": 29,
+            "rsi": 47,
+            "regime": "QUIET",
+            "session": "London",
+            "planned_rr": 2.5,
+        },
     )
 
     assert ticket == 123
@@ -152,6 +165,11 @@ def test_place_order_writes_execution_journal_events(monkeypatch, tmp_path):
     assert "signal_price=1.1" in rows[0]["comment"]
     assert "execution_price=1.1002" in rows[0]["comment"]
     assert "rr=1.50" in rows[0]["comment"]
+    assert rows[0]["entry_strategy"] == "regime_adaptive_entry"
+    assert rows[0]["quality_grade"] == "A"
+    assert rows[0]["planned_rr"] == "2.5"
+    assert float(rows[0]["execution_rr"]) == pytest.approx(1.5, abs=1e-6)
+    assert rows[2]["entry_strategy"] == "regime_adaptive_entry"
 
 
 def test_place_order_journals_rejected_slippage(monkeypatch, tmp_path):

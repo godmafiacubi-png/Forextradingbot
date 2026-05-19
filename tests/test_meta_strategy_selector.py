@@ -55,6 +55,15 @@ def test_ranging_mean_reversion_buys_liquidity_sweep_low():
     assert candidate.confidence >= 0.58
 
 
+def test_quiet_mean_reversion_with_sweep_passes():
+    df = _frame([
+        {"regime": "QUIET", "adx": 14, "rsi": 41, "liq_sweep_low": 1, "near_demand_ob": 0.003}
+    ])
+    candidate = RangingMeanReversionStrategy().evaluate(df, 0)
+    assert candidate is not None
+    assert candidate.signal == 1
+
+
 def test_breakout_retest_sells_after_confirmed_bearish_break():
     df = _frame([
         {"bos_bearish": 1, "adx": 28, "structure": -1, "htf_trend": -1},
@@ -154,3 +163,22 @@ def test_meta_selector_allows_adaptive_sell_when_ml_confirms():
     assert selected["base_signal"] == 0
     assert selected["signal"] == -1
     assert selected["entry_strategy"] in {"regime_adaptive_entry", "breakout_retest"}
+
+
+def test_quiet_baseline_breakout_blocked_without_sweep():
+    df = _frame([
+        {
+            "regime": "QUIET",
+            "signal": 1,
+            "confidence": 0.75,
+            "ict_score": 3,
+            "adx": 21,
+            "structure": 1,
+            "htf_trend": 1,
+            "ml_probability": 0.70,
+            "ml_threshold_buy": 0.52,
+            "ml_threshold_sell": 0.48,
+        }
+    ])
+    selected = MetaStrategySelector().apply(df).iloc[0]
+    assert selected["entry_strategy"] == "ict_ml_baseline"

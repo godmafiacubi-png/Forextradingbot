@@ -58,12 +58,28 @@ class SignalGenerator:
             if near_supply < 0.005 or df.iloc[i].get('ob_supply', 0):
                 ict_sell += 1
 
-            # FVG: score newly created gaps or price returning near an active imbalance.
+            # FVG: only score actionable re-engagement with an existing imbalance.
             near_bull_fvg = float(df.iloc[i].get('near_bull_fvg', 1.0))
             near_bear_fvg = float(df.iloc[i].get('near_bear_fvg', 1.0))
-            if df.iloc[i].get('fvg_bullish', 0) or (df.iloc[i].get('fvg_bull_unfilled', 0) and near_bull_fvg < 0.005):
+            bull_fvg_entry_context = (
+                df.iloc[i].get('fvg_bull_unfilled', 0)
+                and (
+                    near_bull_fvg < 0.005
+                    or df.iloc[i].get('fvg_bull_mitigated', 0)
+                    or df.iloc[i].get('fvg_bull_retest', 0)
+                )
+            )
+            bear_fvg_entry_context = (
+                df.iloc[i].get('fvg_bear_unfilled', 0)
+                and (
+                    near_bear_fvg < 0.005
+                    or df.iloc[i].get('fvg_bear_mitigated', 0)
+                    or df.iloc[i].get('fvg_bear_retest', 0)
+                )
+            )
+            if bull_fvg_entry_context:
                 ict_buy += 1
-            if df.iloc[i].get('fvg_bearish', 0) or (df.iloc[i].get('fvg_bear_unfilled', 0) and near_bear_fvg < 0.005):
+            if bear_fvg_entry_context:
                 ict_sell += 1
 
             # BOS / CHoCH
