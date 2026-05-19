@@ -8,8 +8,8 @@ separate explicit operator-controlled execution gate.
 PROFILE_NAME = "demo"
 PROFILE_OVERRIDES = {
     "PROFILE_NAME": PROFILE_NAME,
-    "DRY_RUN": False,
-    "LIVE_TRADING_CONFIRMED": True,
+    "DRY_RUN": True,
+    "LIVE_TRADING_CONFIRMED": False,
     "ACCOUNT_RISK_PERCENT": 0.5,
     "MAX_OPEN_TRADES": 5,
     "MAX_TRADES_PER_SYMBOL": 1,

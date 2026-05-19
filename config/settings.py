@@ -132,8 +132,8 @@ SIGNAL_COOLDOWN = 2
 # ============================================================
 # EXECUTION SAFETY
 # ============================================================
-DRY_RUN_REQUESTED = _env_bool('DRY_RUN', False)
-LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', True)
+DRY_RUN_REQUESTED = _env_bool('DRY_RUN', True)
+LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', False)
 # Fail-closed: live order routing is enabled only when DRY_RUN=false and
 # LIVE_TRADING_CONFIRMED=true are both set explicitly in the environment.
 DRY_RUN = DRY_RUN_REQUESTED or not LIVE_TRADING_CONFIRMED
@@ -183,7 +183,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 65    
+MIN_QUALITY_SCORE = 70    
 
 # ============================================================
 # META STRATEGY / PRE-LIVE VALIDATION
@@ -295,7 +295,7 @@ MIN_TRAINING_SAMPLES = 100
 # ============================================================
 # ML LABEL GENERATION
 # ============================================================
-ML_LABEL_LOOKAHEAD = 3        # จำนวน bars ล่วงหน้าสำหรับสร้าง label
+ML_LABEL_LOOKAHEAD = 6        # จำนวน bars ล่วงหน้าสำหรับสร้าง label
 ML_LABEL_THRESHOLD = 0.0001   # threshold เป็น % ของ price (1 pip equivalent)
 ML_LABEL_MIN_BALANCE = 0.30   # warning เมื่อ positive class < ค่านี้
 ML_LABEL_MAX_BALANCE = 0.70   # warning เมื่อ positive class > ค่านี้
