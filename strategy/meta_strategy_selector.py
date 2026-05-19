@@ -224,6 +224,56 @@ class MetaStrategySelector:
     def _score(self, candidate):
         return candidate.confidence + min(candidate.ict_score, 4) * 0.03
 
+    def _near_sr_against_signal(self, row, signal):
+        if signal > 0:
+            return _near(row, "near_supply_ob", "near_bear_fvg")
+        if signal < 0:
+            return _near(row, "near_demand_ob", "near_bull_fvg")
+        return False
+
+    def _has_breakout_confirmation(self, row, signal):
+        if signal == 0:
+            return False
+
+        adx = _num(row, "adx", 0.0)
+        min_adx = _num(row, "min_adx", 24.0)
+        if adx < max(25.0, min_adx):
+            return False
+
+        htf = int(_num(row, "htf_trend", 0))
+        htf_aligned = (signal > 0 and htf > 0) or (signal < 0 and htf < 0)
+        if not htf_aligned:
+            return False
+
+        has_break_signal = (
+            _flag(row, "bos_bullish")
+            or _flag(row, "choch_bullish")
+            or _flag(row, "bos_bearish")
+            or _flag(row, "choch_bearish")
+            or normalize_regime_name(row.get("entry_strategy")) == "BREAKOUT_RETEST"
+        )
+        if not has_break_signal:
+            return False
+
+        if signal > 0:
+            return _flag(row, "bos_bullish") or _flag(row, "choch_bullish") or normalize_regime_name(row.get("entry_strategy")) == "BREAKOUT_RETEST"
+        return _flag(row, "bos_bearish") or _flag(row, "choch_bearish") or normalize_regime_name(row.get("entry_strategy")) == "BREAKOUT_RETEST"
+
+    def _candidate_allowed_near_sr(self, row, candidate):
+        if candidate is None or candidate.signal == 0:
+            return False
+
+        if not self._near_sr_against_signal(row, candidate.signal):
+            return True
+
+        if candidate.strategy in {"ict_ml_baseline", "ranging_mean_reversion"}:
+            return False
+
+        if candidate.strategy in {"breakout_retest", "regime_adaptive_entry"}:
+            return self._has_breakout_confirmation(row, candidate.signal)
+
+        return False
+
     def _ml_allows_candidate(self, row, candidate):
         """Require ML confirmation for adaptive candidates when ML data is present.
 
@@ -293,7 +343,7 @@ class MetaStrategySelector:
             self.regime_adaptive.evaluate(df, index),
             self.ranging.evaluate(df, index),
             self.breakout.evaluate(df, index),
-        ) if c is not None and c.signal != 0 and self._ml_allows_candidate(row, c)]
+        ) if c is not None and c.signal != 0 and self._ml_allows_candidate(row, c) and self._candidate_allowed_near_sr(row, c)]
 
         if not candidates:
             return EntryCandidate(0, 0.0, 0, "none", "no entry candidate")
