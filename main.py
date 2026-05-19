@@ -580,7 +580,10 @@ class TradingBot:
             self.risk_guard.cleanup_partial_tracking(open_tickets)
             actions = self.risk_guard.check_partial_close(positions, self.atr_cache)
             for ticket, close_pct, reason in actions:
-                if self.order_manager.partial_close(ticket, close_pct):
+                stage = None
+                if isinstance(reason, str) and reason.startswith("Stage"):
+                    stage = reason.split(":", 1)[0].replace("Stage", "")
+                if self.order_manager.partial_close(ticket, close_pct, stage=stage):
                     add_log(f"[PARTIAL] #{ticket} {close_pct:.0%} — {reason}")
         except Exception as e:
             logger.debug(f"Partial close error: {e}")

@@ -196,8 +196,21 @@ def test_close_order_journals_close_event(monkeypatch, tmp_path):
     module = _load_order_manager(monkeypatch, sent, positions=[position])
     from execution.trade_logger import TradeJournal
 
+    class _BtcConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.01,
+                "digits": 2,
+                "bid": 60010.0,
+                "ask": 60010.5,
+                "spread": 50,
+                "volume_min": 0.01,
+                "volume_max": 10.0,
+                "volume_step": 0.01,
+            }
+
     journal_path = tmp_path / "trades.csv"
-    manager = module.OrderManager(_Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+    manager = module.OrderManager(_BtcConnector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
 
     assert manager.close_order(77) is True
     rows = _journal_rows(journal_path)
@@ -390,3 +403,79 @@ def test_calculate_execution_rr_for_sell(monkeypatch):
     assert risk == pytest.approx(0.00100)
     assert reward == pytest.approx(0.00200)
     assert rr == pytest.approx(2.0)
+
+def test_btc_modify_sl_below_min_distance_skips_journal_event(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(ticket=88, symbol="BTCUSD", type=0, volume=0.1, sl=60000.0, tp=62000.0, profit=10.0)
+    sent = []
+
+    class _BtcInfo:
+        digits = 2
+        point = 0.01
+        trade_stops_level = 50  # min delta = 0.5
+
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+    module.mt5.symbol_info = lambda symbol: _BtcInfo()
+    from execution.trade_logger import TradeJournal
+
+    class _BtcConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.01,
+                "digits": 2,
+                "bid": 60010.0,
+                "ask": 60010.5,
+                "spread": 50,
+                "volume_min": 0.01,
+                "volume_max": 10.0,
+                "volume_step": 0.01,
+            }
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(_BtcConnector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+
+    assert manager.modify_sl(88, 60000.2) is False
+    assert sent == []
+    rows = _journal_rows(journal_path)
+    assert rows == []
+
+
+def test_partial_close_stage_1_cannot_trigger_twice_for_same_ticket(monkeypatch):
+    position = types.SimpleNamespace(ticket=91, symbol="EURUSDm", type=0, volume=0.2, sl=1.099, tp=1.102, profit=5.0)
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+    manager = module.OrderManager(_Connector(), dry_run=False)
+
+    assert manager.partial_close(91, 0.5, stage=1) is True
+    assert manager.partial_close(91, 0.5, stage=1) is False
+    assert len(sent) == 1
+    assert sent[0]["comment"] == "partial_close_s1"
+
+
+def test_close_event_marks_pnl_unavailable_explicitly(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(ticket=101, symbol="EURUSDm", type=0, volume=0.1, sl=1.099, tp=1.102, profit=None)
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+    from execution.trade_logger import TradeJournal
+
+    class _BtcConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.01,
+                "digits": 2,
+                "bid": 60010.0,
+                "ask": 60010.5,
+                "spread": 50,
+                "volume_min": 0.01,
+                "volume_max": 10.0,
+                "volume_step": 0.01,
+            }
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(_BtcConnector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+
+    assert manager.close_order(101) is True
+    row = _journal_rows(journal_path)[0]
+    assert row["event_type"] == "CLOSE"
+    assert row["pnl"] == ""
+    assert row["reason"] == "pnl_unavailable"
+    assert row["comment"] == "pnl_unavailable"
