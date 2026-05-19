@@ -124,16 +124,16 @@ UPDATE_INTERVAL = 60
 # ============================================================
 # ML THRESHOLDS
 # ============================================================
-ML_THRESHOLD_BUY = 0.53
-ML_THRESHOLD_SELL = 0.47
+ML_THRESHOLD_BUY = 0.55
+ML_THRESHOLD_SELL = 0.45
 MIN_CONFIDENCE = 0.55        
 SIGNAL_COOLDOWN = 2
 
 # ============================================================
 # EXECUTION SAFETY
 # ============================================================
-DRY_RUN_REQUESTED = _env_bool('DRY_RUN', True)
-LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', False)
+DRY_RUN_REQUESTED = _env_bool('DRY_RUN', False)
+LIVE_TRADING_CONFIRMED = _env_bool('LIVE_TRADING_CONFIRMED', True)
 # Fail-closed: live order routing is enabled only when DRY_RUN=false and
 # LIVE_TRADING_CONFIRMED=true are both set explicitly in the environment.
 DRY_RUN = DRY_RUN_REQUESTED or not LIVE_TRADING_CONFIRMED
@@ -183,7 +183,7 @@ REQUIRE_ICT_CONFLUENCE = True
 # ============================================================
 # QUALITY FILTER
 # ============================================================
-MIN_QUALITY_SCORE = 55    
+MIN_QUALITY_SCORE = 65    
 
 # ============================================================
 # META STRATEGY / PRE-LIVE VALIDATION
@@ -263,7 +263,7 @@ MAX_SLIPPAGE_POINTS = {
     'EURUSDm': 30,
     'GBPUSDm': 30,
     'USDJPYm': 30,
-    'BTCUSDm': 2000,
+    'BTCUSDm': 200,
     'XAUUSDm': 80,
 }
 DEFAULT_MAX_SLIPPAGE_POINTS = 20
@@ -312,11 +312,11 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 1.0,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.6,
-        'min_confidence': 0.53,
+        'min_confidence': 0.55,
         'min_adx': 22,
         'min_ict_score': 2,
-        'ml_buy_threshold': 0.52,
-        'ml_sell_threshold': 0.48,
+        'ml_buy_threshold': 0.55,
+        'ml_sell_threshold': 0.45,
         'live_ml_buy_threshold': 0.55,
         'live_ml_sell_threshold': 0.45,
         'min_quality_score': 70,
@@ -337,11 +337,11 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 1.0,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.5,
-        'min_confidence': 0.53,
+        'min_confidence': 0.55,
         'min_adx': 22,
         'min_ict_score': 2,
-        'ml_buy_threshold': 0.52,
-        'ml_sell_threshold': 0.48,
+        'ml_buy_threshold': 0.55,
+        'ml_sell_threshold': 0.45,
         'live_ml_buy_threshold': 0.55,
         'live_ml_sell_threshold': 0.45,
         'min_quality_score': 70,
@@ -366,8 +366,8 @@ SYMBOL_SETTINGS = {
         'min_confidence': 0.55,
         'min_adx': 25,
         'min_ict_score': 2,
-        'ml_buy_threshold': 0.53,
-        'ml_sell_threshold': 0.47,
+        'ml_buy_threshold': 0.56,
+        'ml_sell_threshold': 0.44,
         'live_ml_buy_threshold': 0.56,
         'live_ml_sell_threshold': 0.44,
         'min_quality_score': 72,
@@ -388,11 +388,11 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 1.8,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.6,
-        'min_confidence': 0.53,
+        'min_confidence': 0.55,
         'min_adx': 22,
         'min_ict_score': 2,
-        'ml_buy_threshold': 0.52,
-        'ml_sell_threshold': 0.48,
+        'ml_buy_threshold': 0.56,
+        'ml_sell_threshold': 0.44,
         'live_ml_buy_threshold': 0.56,
         'live_ml_sell_threshold': 0.44,
         'min_quality_score': 75,
@@ -413,11 +413,11 @@ SYMBOL_SETTINGS = {
         'sl_atr_mult': 1.0,
         'tp_atr_mult': 3.0,
         'risk_pct': 0.5,
-        'min_confidence': 0.53,
+        'min_confidence': 0.55,
         'min_adx': 22,
         'min_ict_score': 2,
-        'ml_buy_threshold': 0.52,
-        'ml_sell_threshold': 0.48,
+        'ml_buy_threshold': 0.56,
+        'ml_sell_threshold': 0.44,
         'live_ml_buy_threshold': 0.56,
         'live_ml_sell_threshold': 0.44,
         'min_quality_score': 75,
