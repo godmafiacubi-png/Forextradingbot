@@ -181,4 +181,5 @@ def test_quiet_baseline_breakout_blocked_without_sweep():
         }
     ])
     selected = MetaStrategySelector().apply(df).iloc[0]
-    assert selected["entry_strategy"] == "ict_ml_baseline"
+    assert selected["entry_strategy"] == "none"
+    assert selected["signal"] == 0

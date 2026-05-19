@@ -257,10 +257,37 @@ class MetaStrategySelector:
             reason="existing ICT/ML decision tree",
         ).clipped()
 
+    def _quiet_gate_allows(self, row, base):
+        regime = normalize_regime_name(row.get("regime", row.get("market_regime", row.get("htf_regime", "GLOBAL"))))
+        if regime != "QUIET":
+            return True
+        if base is None:
+            return True
+
+        strategy_conf = _num(row, "strategy_confidence", base.confidence)
+        if strategy_conf < 0.62:
+            return False
+
+        if base.strategy == "ict_ml_baseline":
+            min_adx = _num(row, "min_adx", 24.0)
+            adx = _num(row, "adx", 0.0)
+            htf = int(_num(row, "htf_trend", 0))
+            htf_aligned = (base.signal > 0 and htf > 0) or (base.signal < 0 and htf < 0)
+            if adx < max(28.0, min_adx + 4.0) or not htf_aligned:
+                return False
+
+        if base.strategy in {"ranging_mean_reversion", "regime_adaptive_entry", "ict_ml_baseline"}:
+            has_sweep = _flag(row, "liq_sweep_low") or _flag(row, "liq_sweep_high")
+            if not has_sweep:
+                return False
+        return True
+
     def select(self, df, index):
         row = df.iloc[index]
         regime = normalize_regime_name(row.get("regime", row.get("market_regime", row.get("htf_regime", "GLOBAL"))))
         base = self._base_candidate(row)
+        if not self._quiet_gate_allows(row, base):
+            base = None
         candidates = [c for c in (
             base,
             self.regime_adaptive.evaluate(df, index),

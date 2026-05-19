@@ -125,3 +125,22 @@ def test_demo_profile_forces_dry_run(monkeypatch):
 
     assert settings.PROFILE_NAME == "demo"
     assert settings.DRY_RUN is True
+
+
+def test_live_profile_symbol_thresholds_and_quality(monkeypatch):
+    monkeypatch.setenv("SETTINGS_PROFILE", "live")
+    settings = _load_settings(monkeypatch)
+
+    eur = settings.get_symbol_config("EURUSDm")
+    jpy = settings.get_symbol_config("USDJPYm")
+    xau = settings.get_symbol_config("XAUUSDm")
+    btc = settings.get_symbol_config("BTCUSDm")
+
+    assert eur["live_ml_buy_threshold"] == 0.55 and eur["live_ml_sell_threshold"] == 0.45
+    assert jpy["live_ml_buy_threshold"] == 0.56 and jpy["live_ml_sell_threshold"] == 0.44
+    assert xau["live_ml_buy_threshold"] == 0.56 and xau["live_ml_sell_threshold"] == 0.44
+    assert btc["live_ml_buy_threshold"] == 0.56 and btc["live_ml_sell_threshold"] == 0.44
+    assert eur["min_quality_score"] == 70
+    assert jpy["min_quality_score"] == 72
+    assert xau["min_quality_score"] == 75
+    assert btc["min_quality_score"] == 75
