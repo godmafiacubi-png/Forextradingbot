@@ -21,7 +21,12 @@ def _load_settings(monkeypatch):
     return importlib.reload(settings)
 
 
+def _use_default_profile(monkeypatch):
+    monkeypatch.delenv("SETTINGS_PROFILE", raising=False)
+
+
 def test_bot_mode_can_be_configured_from_environment(monkeypatch):
+    _use_default_profile(monkeypatch)
     monkeypatch.setenv("BOT_MODE", "default")
 
     settings = _load_settings(monkeypatch)
@@ -31,6 +36,7 @@ def test_bot_mode_can_be_configured_from_environment(monkeypatch):
 
 
 def test_dashboard_port_defaults_to_documented_port(monkeypatch):
+    _use_default_profile(monkeypatch)
     monkeypatch.delenv("DASHBOARD_PORT", raising=False)
 
     settings = _load_settings(monkeypatch)
@@ -39,6 +45,7 @@ def test_dashboard_port_defaults_to_documented_port(monkeypatch):
 
 
 def test_live_trading_requires_explicit_confirmation(monkeypatch):
+    _use_default_profile(monkeypatch)
     monkeypatch.delenv("DRY_RUN", raising=False)
     monkeypatch.delenv("LIVE_TRADING_CONFIRMED", raising=False)
 
@@ -59,6 +66,7 @@ def test_live_trading_requires_explicit_confirmation(monkeypatch):
 
 
 def test_execution_safety_env_values_are_parsed(monkeypatch):
+    _use_default_profile(monkeypatch)
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.setenv("ORDER_MAGIC", "98765")
     monkeypatch.setenv("ORDER_DEVIATION", "7")
@@ -78,6 +86,7 @@ def test_execution_safety_env_values_are_parsed(monkeypatch):
 
 
 def test_symbol_settings_cover_all_configured_symbols(monkeypatch):
+    _use_default_profile(monkeypatch)
     settings = _load_settings(monkeypatch)
 
     configured_symbols = {
@@ -99,6 +108,7 @@ def test_symbol_settings_cover_all_configured_symbols(monkeypatch):
 
 
 def test_xauusd_spread_cap_matches_broker_points(monkeypatch):
+    _use_default_profile(monkeypatch)
     settings = _load_settings(monkeypatch)
 
     assert settings.SYMBOL_POINTS["XAUUSDm"] == 0.001
