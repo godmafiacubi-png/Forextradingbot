@@ -68,6 +68,7 @@ def test_live_trading_requires_explicit_confirmation(monkeypatch):
 def test_execution_safety_env_values_are_parsed(monkeypatch):
     _use_default_profile(monkeypatch)
     monkeypatch.setenv("DRY_RUN", "true")
+    monkeypatch.delenv("LIVE_TRADING_CONFIRMED", raising=False)
     monkeypatch.setenv("ORDER_MAGIC", "98765")
     monkeypatch.setenv("ORDER_DEVIATION", "7")
     monkeypatch.setenv("MAX_LOT_SIZE", "0.25")
