@@ -34,6 +34,7 @@ from ml_models.model_manager import ModelManager
 from ml_models.deep_rl_agent import DeepRLTradingAgent
 from ml_models.ml_hub import MLHub
 from strategy.signal_generator import SignalGenerator
+from strategy.market_context_engine import MarketContextEngine
 from strategy.news_filter import NewsFilter
 from strategy.smart_filters import (
     SignalQualityScorer, AdaptiveThreshold, LossStreakManager,
@@ -232,6 +233,7 @@ class TradingBot:
             logger.info(f"     Trades: {rl_stats.get('total_trades',0)} | Steps: {rl_stats.get('train_steps',0)} | Buffer: {rl_stats.get('buffer_size',0)}")
 
             self.m30_analyzer = M30Analyzer(self.mt5, self.ml_model)
+            self.market_context_engine = MarketContextEngine()
             logger.info("[OK] M30 Multi-TF")
 
             self.quality_scorer = SignalQualityScorer()
@@ -842,6 +844,28 @@ class TradingBot:
             sl_mult = exit_policy['sl_atr_mult']
             tp_mult = exit_policy['tp_atr_mult']
             signal_name = "BUY" if signal == 1 else ("SELL" if signal == -1 else "HOLD")
+            context_row = {
+                'regime': regime_name,
+                'market_regime': latest.get('market_regime', latest.get('regime', regime_name)),
+                'htf_regime': htf_str,
+                'adx': adx,
+                'rsi': rsi,
+                'atr_pct': float(latest.get('atr_pct', 0)),
+                'structure': structure,
+                'htf_trend': htf,
+                'ml_probability': ml_prob,
+                'ict_score': ict_score,
+                'bos_bullish': latest.get('bos_bullish', 0),
+                'bos_bearish': latest.get('bos_bearish', 0),
+                'choch_bullish': latest.get('choch_bullish', 0),
+                'choch_bearish': latest.get('choch_bearish', 0),
+                'liq_sweep_low': latest.get('liq_sweep_low', 0),
+                'liq_sweep_high': latest.get('liq_sweep_high', 0),
+                'spread': cur_spread,
+                'avg_spread': avg_spread,
+            }
+            market_context = self.market_context_engine.analyze_row(context_row, sym_cfg)
+            context_bias_name = "BUY" if market_context.direction_bias == 1 else ("SELL" if market_context.direction_bias == -1 else "HOLD")
 
             perf_adj = self.perf_adjuster.get_adjustments()
             adjusted_conf_thresh = sym_min_conf + perf_adj.get('conf_adj', 0)
@@ -860,6 +884,16 @@ class TradingBot:
             logger.info(f"  │ DistSup: {dist_to_support:.1f}ATR  DistRes: {dist_to_resist:.1f}ATR  SwL: {swing_low:.5f}  SwH: {swing_high:.5f}")
             logger.info(f"  │ H1: {h1_trend}  H4: {htf_str}  RSI={rsi:.1f}  ADX={adx:.1f}  ML: {ml_prob:.4f}")
             logger.info(f"  │ DeepRL: {rl_name} | Regime: {regime_name} | {meta_tag} | Temporal: {'Y' if hub_result.temporal_enriched else 'N'} | Src: {rl_src}")
+            logger.info(
+                "  │ MarketContext: %s bias=%s strategy=%s allow=%s risk_mult=%.2f tp_rr=%.2f reason=%s",
+                market_context.market_regime,
+                context_bias_name,
+                market_context.preferred_strategy,
+                str(market_context.allow_trade).lower(),
+                float(market_context.risk_mult),
+                float(market_context.tp_rr),
+                market_context.reason,
+            )
             logger.info(
                 f"  │ Strategy: {entry_strategy} ({strategy_conf:.2%}) | "
                 f"Reason: {strategy_reason or 'n/a'}"
@@ -1015,6 +1049,15 @@ class TradingBot:
                 'avg_spread': round(float(avg_spread), 2),
                 'adx': round(float(adx), 2),
                 'rsi': round(float(rsi), 2),
+                'market_context': market_context.market_regime,
+                'context_bias': context_bias_name,
+                'context_strategy': market_context.preferred_strategy,
+                'context_allow_trade': bool(market_context.allow_trade),
+                'context_reason': market_context.reason,
+                'context_risk_mult': float(market_context.risk_mult),
+                'context_tp_rr': float(market_context.tp_rr),
+                'context_sl_atr_mult': float(market_context.sl_atr_mult),
+                'context_min_quality_score': int(market_context.min_quality_score),
                 'updated': datetime.now().strftime('%H:%M:%S'),
             })
 
@@ -1065,6 +1108,15 @@ class TradingBot:
                 'regime': regime_name,
                 'session': session_str,
                 'planned_rr': round(float(planned_rr), 4),
+                'market_context': market_context.market_regime,
+                'context_bias': context_bias_name,
+                'context_strategy': market_context.preferred_strategy,
+                'context_allow_trade': bool(market_context.allow_trade),
+                'context_reason': market_context.reason,
+                'context_risk_mult': float(market_context.risk_mult),
+                'context_tp_rr': float(market_context.tp_rr),
+                'context_sl_atr_mult': float(market_context.sl_atr_mult),
+                'context_min_quality_score': int(market_context.min_quality_score),
             }
             ticket = self.order_manager.place_order(
                 symbol, ot, lot, sl, tp, f"v71_{signal_name}_{quality_grade}_{regime_name[:3]}",
