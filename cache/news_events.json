@@ -1,17 +1,5 @@
 [
   {
-    "time": "2026-05-20 18:00",
-    "currency": "USD",
-    "title": "FOMC Minutes / Rate Decision",
-    "impact": "HIGH"
-  },
-  {
-    "time": "2026-05-21 12:30",
-    "currency": "USD",
-    "title": "Unemployment Claims",
-    "impact": "HIGH"
-  },
-  {
     "time": "2026-05-22 12:30",
     "currency": "USD",
     "title": "NFP / Non-Farm Payrolls",
