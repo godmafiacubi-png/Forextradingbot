@@ -1095,7 +1095,10 @@ class TradingBot:
                 f"execution RR uses broker bid/ask in OrderManager [{regime_name}]"
             )
 
-            max_slippage = MAX_SLIPPAGE_POINTS.get(symbol, DEFAULT_MAX_SLIPPAGE_POINTS)
+            static_slippage_cap = MAX_SLIPPAGE_POINTS.get(symbol, DEFAULT_MAX_SLIPPAGE_POINTS)
+            atr_fraction = float(SLIPPAGE_ATR_FRACTIONS.get(symbol, 0.0))
+            atr_slippage_cap = (atr * atr_fraction / sp) if (atr is not None and atr_fraction > 0 and sp > 0) else 0.0
+            max_slippage = max(static_slippage_cap, atr_slippage_cap)
             diagnostics = {
                 'entry_strategy': entry_strategy,
                 'strategy_confidence': round(float(strategy_conf), 4),
@@ -1108,6 +1111,8 @@ class TradingBot:
                 'regime': regime_name,
                 'session': session_str,
                 'planned_rr': round(float(planned_rr), 4),
+                'avg_spread': float(ai.get('avg_spread', 0.0)) if isinstance(ai, dict) else 0.0,
+                'max_slippage_points': round(float(max_slippage), 4),
                 'market_context': market_context.market_regime,
                 'context_bias': context_bias_name,
                 'context_strategy': market_context.preferred_strategy,

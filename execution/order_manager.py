@@ -28,6 +28,7 @@ class OrderManager:
                 slippage_cooldown_seconds = 600
         self.slippage_cooldown_seconds = max(0, float(slippage_cooldown_seconds))
         self._slippage_cooldowns = {}
+        self._slippage_cooldown_block_logged = set()
         self._partial_close_stages = {}
 
     def _journal_event(self, method_name, *args, **kwargs):
@@ -76,19 +77,25 @@ class OrderManager:
         return " | ".join(parts)
 
     def _slippage_cooldown_remaining(self, symbol, side):
-        expires_at = self._slippage_cooldowns.get(self._cooldown_key(symbol, side))
+        key = self._cooldown_key(symbol, side)
+        expires_at = self._slippage_cooldowns.get(key)
         if expires_at is None:
             return 0
         remaining = expires_at - time.time()
         if remaining <= 0:
-            self._slippage_cooldowns.pop(self._cooldown_key(symbol, side), None)
+            self._slippage_cooldowns.pop(key, None)
+            self._slippage_cooldown_block_logged.discard(key)
+            logger.info(f"[COOLDOWN_END] {symbol} {side} slippage cooldown expired")
             return 0
         return remaining
 
     def _start_slippage_cooldown(self, symbol, side):
         if self.slippage_cooldown_seconds <= 0:
             return
-        self._slippage_cooldowns[self._cooldown_key(symbol, side)] = time.time() + self.slippage_cooldown_seconds
+        key = self._cooldown_key(symbol, side)
+        self._slippage_cooldowns[key] = time.time() + self.slippage_cooldown_seconds
+        self._slippage_cooldown_block_logged.discard(key)
+        logger.warning(f"[COOLDOWN_START] {symbol} {side} slippage cooldown started for {self.slippage_cooldown_seconds:.0f}s")
 
     def set_limits(self, max_open_trades, max_per_symbol=None):
         self.max_open_trades = max_open_trades
@@ -203,16 +210,20 @@ class OrderManager:
 
     def place_order(self, symbol, order_type, volume, stop_loss, take_profit, comment="",
                     reference_price=None, max_slippage_points=None, diagnostics=None):
+        attempted = False
+        side = self._side_label(order_type)
         try:
-            side = self._side_label(order_type)
             cooldown_remaining = self._slippage_cooldown_remaining(symbol, side)
             if cooldown_remaining > 0:
                 message = "slippage cooldown"
                 logger.warning(f"[SKIP] {symbol} {side} {message} ({cooldown_remaining:.0f}s remaining)")
-                self._journal_event(
-                    "log_order_rejected", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
-                    reason=message, comment=message, source="order_manager",
-                )
+                key = self._cooldown_key(symbol, side)
+                if key not in self._slippage_cooldown_block_logged:
+                    self._journal_event(
+                        "log_order_rejected", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
+                        reason=message, comment=message, source="order_manager",
+                    )
+                    self._slippage_cooldown_block_logged.add(key)
                 return None
 
             if not self.can_open_trade(symbol):
@@ -236,15 +247,21 @@ class OrderManager:
             if reference_price is not None and max_slippage_points is not None and point > 0:
                 slippage_points = abs(price - reference_price) / point
                 if slippage_points > max_slippage_points:
+                    diag = diagnostics or {}
                     message = (
                         f"slippage guard: {slippage_points:.1f}pts > {max_slippage_points}pts "
-                        f"(ref={reference_price}, exec={price})"
+                        f"(ref={reference_price}, exec={price}, spread={si.get('spread')}, "
+                        f"avg_spread={diag.get('avg_spread')}, confidence={diag.get('strategy_confidence')}, "
+                        f"entry_strategy={diag.get('entry_strategy')}, regime={diag.get('regime')})"
                     )
                     logger.warning(f"[SKIP] {symbol} {message}")
                     self._start_slippage_cooldown(symbol, side)
                     self._journal_event(
                         "log_order_rejected", symbol, side=side, volume=volume, price=price,
                         sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
+                        slippage_points=slippage_points,
+                        spread=si.get("spread"),
+                        confidence=(diagnostics or {}).get("strategy_confidence"),
                     )
                     return None
             digits = self._get_digits(symbol)
@@ -312,6 +329,7 @@ class OrderManager:
                 "log_order_attempt", symbol, side, volume, price,
                 sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
             )
+            attempted = True
             result = self._send_order(request, f"would place {side} {symbol} {volume} lots")
             if self.dry_run:
                 return None
@@ -338,6 +356,11 @@ class OrderManager:
             return result.order
         except Exception as e:
             logger.error(f"Place order error: {e}")
+            if attempted:
+                self._journal_event(
+                    "log_order_failed", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
+                    comment=f"exception after attempt: {e}",
+                )
             return None
 
     def _min_sl_modify_distance(self, symbol):

@@ -263,10 +263,14 @@ MAX_SLIPPAGE_POINTS = {
     'EURUSDm': 30,
     'GBPUSDm': 30,
     'USDJPYm': 30,
-    'BTCUSDm': 200,
-    'XAUUSDm': 80,
+    'BTCUSDm': _env_int('MAX_SLIPPAGE_POINTS_BTCUSDM', 200),
+    'XAUUSDm': _env_int('MAX_SLIPPAGE_POINTS_XAUUSDM', 300),
 }
 DEFAULT_MAX_SLIPPAGE_POINTS = 20
+SLIPPAGE_ATR_FRACTIONS = {
+    'XAUUSDm': float(os.getenv('SLIPPAGE_ATR_FRACTION_XAUUSDM', 0.03)),
+    'BTCUSDm': float(os.getenv('SLIPPAGE_ATR_FRACTION_BTCUSDM', 0.02)),
+}
 SLIPPAGE_REJECTION_COOLDOWN_SECONDS = _env_int('SLIPPAGE_REJECTION_COOLDOWN_SECONDS', 600)
 
 # ============================================================
