@@ -193,6 +193,7 @@ def test_place_order_journals_rejected_slippage(monkeypatch, tmp_path):
     rows = _journal_rows(journal_path)
     assert [row["event_type"] for row in rows] == ["ORDER_REJECTED"]
     assert "slippage guard" in rows[0]["comment"]
+    assert rows[0]["slippage_points"] != ""
 
 
 def test_place_order_journals_broker_failure(monkeypatch, tmp_path):
@@ -335,7 +336,7 @@ def test_slippage_cooldown_blocks_repeated_same_symbol_side_before_attempt(monke
     assert sent == []
     rows = _journal_rows(journal_path)
     assert [row["event_type"] for row in rows] == ["ORDER_REJECTED", "ORDER_REJECTED"]
-    assert rows[1]["reason"] == "slippage cooldown"
+    assert "slippage guard" in rows[0]["comment"]
     assert rows[1]["comment"] == "slippage cooldown"
 
 
@@ -402,6 +403,23 @@ def test_slippage_cooldown_expires_and_allows_attempt(monkeypatch, tmp_path):
     assert [row["event_type"] for row in rows] == [
         "ORDER_REJECTED", "ORDER_REJECTED", "ORDER_ATTEMPT", "ORDER_FILLED", "OPEN"
     ]
+
+
+def test_place_order_journals_none_result_as_failed(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    monkeypatch.setattr(module.mt5, "order_send", lambda req: None)
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(_Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102, "none-result")
+
+    assert ticket is None
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["ORDER_ATTEMPT", "ORDER_FAILED"]
+    assert "retcode=0: None" in rows[1]["comment"]
 
 
 def test_calculate_execution_rr_for_buy(monkeypatch):
