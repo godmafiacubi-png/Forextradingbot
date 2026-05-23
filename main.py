@@ -1111,7 +1111,7 @@ class TradingBot:
                 'regime': regime_name,
                 'session': session_str,
                 'planned_rr': round(float(planned_rr), 4),
-                'avg_spread': float(ai.get('avg_spread', 0.0)) if isinstance(ai, dict) else 0.0,
+                'avg_spread': float(avg_spread),
                 'max_slippage_points': round(float(max_slippage), 4),
                 'market_context': market_context.market_regime,
                 'context_bias': context_bias_name,
