@@ -45,6 +45,16 @@ JOURNAL_FIELDS = [
     "q_value",
     "action",
     "comment",
+    "market_context",
+    "context_bias",
+    "context_strategy",
+    "context_allow_trade",
+    "context_reason",
+    "context_risk_mult",
+    "context_tp_rr",
+    "context_sl_atr_mult",
+    "context_min_quality_score",
+    "max_slippage_points",
 ]
 
 EVENT_SIGNAL = "SIGNAL"
@@ -118,7 +128,17 @@ class TradeJournal:
                     rl_reward REAL,
                     q_value REAL,
                     action TEXT,
-                    comment TEXT
+                    comment TEXT,
+                    market_context TEXT,
+                    context_bias TEXT,
+                    context_strategy TEXT,
+                    context_allow_trade INTEGER,
+                    context_reason TEXT,
+                    context_risk_mult REAL,
+                    context_tp_rr REAL,
+                    context_sl_atr_mult REAL,
+                    context_min_quality_score INTEGER,
+                    max_slippage_points REAL
                 )
                 """
             )
@@ -147,6 +167,16 @@ class TradeJournal:
                 ("rl_reward", "REAL"),
                 ("q_value", "REAL"),
                 ("action", "TEXT"),
+                ("market_context", "TEXT"),
+                ("context_bias", "TEXT"),
+                ("context_strategy", "TEXT"),
+                ("context_allow_trade", "INTEGER"),
+                ("context_reason", "TEXT"),
+                ("context_risk_mult", "REAL"),
+                ("context_tp_rr", "REAL"),
+                ("context_sl_atr_mult", "REAL"),
+                ("context_min_quality_score", "INTEGER"),
+                ("max_slippage_points", "REAL"),
             ):
                 if field not in existing:
                     conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {field} {sql_type}")
@@ -158,7 +188,11 @@ class TradeJournal:
                      strategy_confidence=None, quality_score=None, quality_grade="",
                      ml_prob=None, ict_score=None, adx=None, rsi=None,
                      planned_rr=None, execution_rr=None, rl_reward=None,
-                     q_value=None, action="", comment=""):
+                     q_value=None, action="", comment="", market_context="",
+                     context_bias="", context_strategy="", context_allow_trade=None,
+                     context_reason="", context_risk_mult=None, context_tp_rr=None,
+                     context_sl_atr_mult=None, context_min_quality_score=None,
+                     max_slippage_points=None):
         row = {
             "event_time": self._now_iso(),
             "event_type": event_type,
@@ -194,6 +228,16 @@ class TradeJournal:
             "q_value": q_value,
             "action": "" if action is None else str(action),
             "comment": comment or "",
+            "market_context": market_context or "",
+            "context_bias": context_bias or "",
+            "context_strategy": context_strategy or "",
+            "context_allow_trade": context_allow_trade,
+            "context_reason": context_reason or "",
+            "context_risk_mult": context_risk_mult,
+            "context_tp_rr": context_tp_rr,
+            "context_sl_atr_mult": context_sl_atr_mult,
+            "context_min_quality_score": context_min_quality_score,
+            "max_slippage_points": max_slippage_points,
         }
         if self.csv_path:
             with self.csv_path.open("a", newline="", encoding="utf-8") as fh:
