@@ -196,6 +196,107 @@ def test_place_order_journals_rejected_slippage(monkeypatch, tmp_path):
     assert rows[0]["slippage_points"] != ""
 
 
+
+
+def test_place_order_journals_rejected_slippage_with_diagnostics_fields(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(_Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+    diagnostics = {
+        "entry_strategy": "regime_adaptive_entry",
+        "strategy_confidence": 0.81,
+        "quality_score": 79,
+        "quality_grade": "B",
+        "ml_prob": 0.58,
+        "ict_score": 2.0,
+        "adx": 27,
+        "rsi": 49,
+        "planned_rr": 2.2,
+        "regime": "TREND",
+        "session": "NY",
+        "market_context": "breakout",
+        "context_bias": "bullish",
+        "context_strategy": "momentum",
+        "context_allow_trade": 1,
+        "context_reason": "alignment",
+        "context_risk_mult": 0.8,
+        "context_tp_rr": 2.4,
+        "context_sl_atr_mult": 1.6,
+        "context_min_quality_score": 70,
+    }
+
+    ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102,
+        reference_price=1.10000, max_slippage_points=10, diagnostics=diagnostics,
+    )
+
+    assert ticket is None
+    rows = _journal_rows(journal_path)
+    row = rows[0]
+    for key, val in diagnostics.items():
+        assert row[key] == str(val)
+    assert row["max_slippage_points"] == "10"
+
+
+def test_btc_spread_gate_blocks_before_order_attempt(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    class _BtcWideSpreadConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.01,
+                "digits": 2,
+                "bid": 60000.0,
+                "ask": 60012.0,
+                "spread": 1300,
+                "volume_min": 0.01,
+                "volume_max": 10.0,
+                "volume_step": 0.01,
+            }
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(
+        _BtcWideSpreadConnector(),
+        dry_run=False,
+        trade_journal=TradeJournal(csv_path=journal_path),
+    )
+
+    ticket = manager.place_order("BTCUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 59800.0, 60500.0)
+
+    assert ticket is None
+    assert sent == []
+    rows = _journal_rows(journal_path)
+    assert [r["event_type"] for r in rows] == ["ORDER_REJECTED"]
+    assert "btc spread gate" in rows[0]["comment"]
+
+
+def test_forex_order_unchanged_when_spread_high_but_not_btc_gate(monkeypatch):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+
+    class _ForexWideSpreadConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.00001,
+                "digits": 5,
+                "bid": 1.10000,
+                "ask": 1.10020,
+                "spread": 2000,
+                "volume_min": 0.001,
+                "volume_max": 10.0,
+                "volume_step": 0.001,
+            }
+
+    manager = module.OrderManager(_ForexWideSpreadConnector(), dry_run=False, magic=99, deviation=5)
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1234, 1.099, 1.102, "test")
+
+    assert ticket == 123
+    assert len(sent) == 1
 def test_place_order_journals_broker_failure(monkeypatch, tmp_path):
     sent = []
     module = _load_order_manager(monkeypatch, sent, retcode=10030)
