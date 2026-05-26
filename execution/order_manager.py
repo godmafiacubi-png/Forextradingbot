@@ -270,11 +270,13 @@ class OrderManager:
             if self._is_btc_symbol(symbol) and spread_points is not None and float(spread_points) > self._btc_max_entry_spread_points:
                 message = f"btc spread gate: spread={spread_points}pts > {self._btc_max_entry_spread_points:.0f}pts"
                 logger.warning(f"[SKIP] {symbol} {message}")
+                safe_context = dict(journal_context)
+                safe_context["spread"] = spread_points
+                safe_context["max_slippage_points"] = self._btc_max_entry_spread_points
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, reason=message, comment=message, source="order_manager",
-                    spread=spread_points, max_slippage_points=self._btc_max_entry_spread_points,
-                    **journal_context,
+                    **safe_context,
                 )
                 return None
             if reference_price is not None and max_slippage_points is not None and point > 0:
@@ -289,14 +291,15 @@ class OrderManager:
                     )
                     logger.warning(f"[SKIP] {symbol} {message}")
                     self._start_slippage_cooldown(symbol, side)
+                    safe_context = dict(journal_context)
+                    safe_context["max_slippage_points"] = max_slippage_points
+                    safe_context["slippage_points"] = slippage_points
+                    safe_context["spread"] = si.get("spread")
+                    safe_context["confidence"] = journal_context.get("strategy_confidence")
                     self._journal_event(
                         "log_order_rejected", symbol, side=side, volume=volume, price=price,
                         sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
-                        slippage_points=slippage_points,
-                        spread=si.get("spread"),
-                        confidence=journal_context.get("strategy_confidence"),
-                        max_slippage_points=max_slippage_points,
-                        **journal_context,
+                        **safe_context,
                     )
                     return None
             digits = self._get_digits(symbol)
