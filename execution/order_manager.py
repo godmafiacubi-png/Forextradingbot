@@ -30,6 +30,7 @@ class OrderManager:
         self._slippage_cooldowns = {}
         self._slippage_cooldown_block_logged = set()
         self._partial_close_stages = {}
+        self._btc_max_entry_spread_points = self._resolve_btc_max_entry_spread_points()
 
     def _journal_event(self, method_name, *args, **kwargs):
         kwargs.setdefault("source", "order_manager")
@@ -75,6 +76,24 @@ class OrderManager:
         if rr is not None:
             parts.append(f"rr={rr:.2f}")
         return " | ".join(parts)
+
+    @staticmethod
+    def _resolve_btc_max_entry_spread_points():
+        try:
+            from config import settings as _settings
+            value = getattr(_settings, "BTC_MAX_ENTRY_SPREAD_POINTS", None)
+            if value is None:
+                value = getattr(_settings, "MAX_SPREAD_POINTS_BTCUSDM", None)
+            if value is not None:
+                return float(value)
+        except Exception:
+            pass
+        return 1200.0
+
+    @staticmethod
+    def _is_btc_symbol(symbol):
+        symbol_up = str(symbol).upper()
+        return "BTC" in symbol_up and "USD" in symbol_up
 
     def _slippage_cooldown_remaining(self, symbol, side):
         key = self._cooldown_key(symbol, side)
@@ -212,6 +231,7 @@ class OrderManager:
                     reference_price=None, max_slippage_points=None, diagnostics=None):
         attempted = False
         side = self._side_label(order_type)
+        journal_context = dict(diagnostics or {})
         try:
             cooldown_remaining = self._slippage_cooldown_remaining(symbol, side)
             if cooldown_remaining > 0:
@@ -222,6 +242,7 @@ class OrderManager:
                     self._journal_event(
                         "log_order_rejected", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
                         reason=message, comment=message, source="order_manager",
+                        **journal_context,
                     )
                     self._slippage_cooldown_block_logged.add(key)
                 return None
@@ -239,11 +260,23 @@ class OrderManager:
                 self._journal_event(
                     "log_order_failed", symbol, side=side, volume=volume, sl=stop_loss, tp=take_profit,
                     comment="symbol info unavailable",
+                    **journal_context,
                 )
                 return None
 
             price = si['ask'] if order_type == mt5.ORDER_TYPE_BUY else si['bid']
             point = si.get('point', 0)
+            spread_points = si.get("spread")
+            if self._is_btc_symbol(symbol) and spread_points is not None and float(spread_points) > self._btc_max_entry_spread_points:
+                message = f"btc spread gate: spread={spread_points}pts > {self._btc_max_entry_spread_points:.0f}pts"
+                logger.warning(f"[SKIP] {symbol} {message}")
+                self._journal_event(
+                    "log_order_rejected", symbol, side=side, volume=volume, price=price,
+                    sl=stop_loss, tp=take_profit, reason=message, comment=message, source="order_manager",
+                    spread=spread_points, max_slippage_points=self._btc_max_entry_spread_points,
+                    **journal_context,
+                )
+                return None
             if reference_price is not None and max_slippage_points is not None and point > 0:
                 slippage_points = abs(price - reference_price) / point
                 if slippage_points > max_slippage_points:
@@ -261,7 +294,9 @@ class OrderManager:
                         sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
                         slippage_points=slippage_points,
                         spread=si.get("spread"),
-                        confidence=(diagnostics or {}).get("strategy_confidence"),
+                        confidence=journal_context.get("strategy_confidence"),
+                        max_slippage_points=max_slippage_points,
+                        **journal_context,
                     )
                     return None
             digits = self._get_digits(symbol)
@@ -271,6 +306,7 @@ class OrderManager:
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, comment="invalid SL/TP side",
+                    **journal_context,
                 )
                 return None
 
@@ -279,6 +315,7 @@ class OrderManager:
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, comment="invalid SL/TP after stop-level adjustment",
+                    **journal_context,
                 )
                 return None
 
@@ -293,6 +330,7 @@ class OrderManager:
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
+                    **journal_context,
                 )
                 return None
 
@@ -307,6 +345,7 @@ class OrderManager:
                 self._journal_event(
                     "log_order_rejected", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
+                    **journal_context,
                 )
                 return None
 
@@ -323,7 +362,6 @@ class OrderManager:
                 f"execution_price={price:.{digits}f} SL={stop_loss:.{digits}f} "
                 f"TP={take_profit:.{digits}f} R:R=1:{rr:.2f}"
             )
-            journal_context = dict(diagnostics or {})
             journal_context.setdefault("execution_rr", rr)
             self._journal_event(
                 "log_order_attempt", symbol, side, volume, price,
@@ -341,6 +379,7 @@ class OrderManager:
                 self._journal_event(
                     "log_order_failed", symbol, side=side, volume=volume, price=price,
                     sl=stop_loss, tp=take_profit, comment=message, source="order_manager",
+                    **journal_context,
                 )
                 return None
 
