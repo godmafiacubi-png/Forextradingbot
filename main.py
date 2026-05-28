@@ -843,6 +843,13 @@ class TradingBot:
             )
             sl_mult = exit_policy['sl_atr_mult']
             tp_mult = exit_policy['tp_atr_mult']
+            if entry_strategy == "liquidity_sweep_reversal":
+                sl_type = "sweep_structure"
+                target_rr = 1.2 if regime_name == "QUIET" else (1.8 if regime_name == "RANGING" else 1.5)
+                tp_mult = sl_mult * target_rr
+                conservative_mult = float(exit_policy.get('risk_mult', 1.0))
+                exit_policy['risk_mult'] = min(conservative_mult, 0.5)
+                exit_policy['sl_type'] = sl_type
             signal_name = "BUY" if signal == 1 else ("SELL" if signal == -1 else "HOLD")
             context_row = {
                 'regime': regime_name,
@@ -1123,6 +1130,9 @@ class TradingBot:
                 'context_sl_atr_mult': float(market_context.sl_atr_mult),
                 'context_min_quality_score': int(market_context.min_quality_score),
             }
+            if entry_strategy == "liquidity_sweep_reversal":
+                diagnostics['reason'] = f"{strategy_reason}|sweep_{'low' if signal == 1 else 'high'}"
+                diagnostics['sl_type'] = exit_policy.get('sl_type', 'sweep_structure')
             ticket = self.order_manager.place_order(
                 symbol, ot, lot, sl, tp, f"v71_{signal_name}_{quality_grade}_{regime_name[:3]}",
                 reference_price=price, max_slippage_points=max_slippage, diagnostics=diagnostics
