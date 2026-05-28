@@ -94,7 +94,11 @@ def test_meta_selector_adds_adaptive_signal_when_baseline_is_flat():
 
     assert selected["base_signal"] == 0
     assert selected["signal"] == -1
-    assert selected["entry_strategy"] in {"regime_adaptive_entry", "ranging_mean_reversion"}
+    assert selected["entry_strategy"] in {
+        "liquidity_sweep_reversal",
+        "regime_adaptive_entry",
+        "ranging_mean_reversion",
+    }
     assert selected["strategy_confidence"] >= 0.57
 
 
@@ -428,7 +432,7 @@ def test_liquidity_sweep_reversal_sell_allowed_near_support_when_sweep_matches()
     assert selected["entry_strategy"] == "liquidity_sweep_reversal"
 
 
-def test_liquidity_sweep_reversal_near_sr_blocked_without_matching_sweep_direction():
+def test_liquidity_sweep_reversal_sell_allowed_near_resistance_when_sweep_matches():
     df = _frame([{
         "regime": "RANGING",
         "market_context": "RANGING",
@@ -443,5 +447,5 @@ def test_liquidity_sweep_reversal_near_sr_blocked_without_matching_sweep_directi
 
     selected = MetaStrategySelector().apply(df).iloc[0]
 
-    assert selected["signal"] == 0
-    assert selected["entry_strategy"] == "none"
+    assert selected["signal"] == -1
+    assert selected["entry_strategy"] == "liquidity_sweep_reversal"
