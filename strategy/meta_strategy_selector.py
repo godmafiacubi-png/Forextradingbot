@@ -252,7 +252,7 @@ class RegimeAdaptiveEntryStrategy:
                     candidate.signal,
                     candidate.confidence,
                     candidate.ict_score,
-                    self.name,
+                    candidate.strategy,
                     f"{regime.lower()} routed to {candidate.strategy}",
                 ).clipped()
             return None
@@ -268,7 +268,7 @@ class RegimeAdaptiveEntryStrategy:
                 candidate.signal,
                 confidence,
                 candidate.ict_score,
-                self.name,
+                candidate.strategy,
                 f"{regime.lower()} routed to {candidate.strategy}",
             ).clipped()
         return None
@@ -327,6 +327,12 @@ class MetaStrategySelector:
     def _candidate_allowed_near_sr(self, row, candidate):
         if candidate is None or candidate.signal == 0:
             return False
+
+        if candidate.strategy == "liquidity_sweep_reversal":
+            if candidate.signal > 0 and _flag(row, "liq_sweep_low"):
+                return True
+            if candidate.signal < 0 and _flag(row, "liq_sweep_high"):
+                return True
 
         if not self._near_sr_against_signal(row, candidate.signal):
             return True
