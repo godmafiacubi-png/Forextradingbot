@@ -3,6 +3,7 @@ import pytest
 np = pytest.importorskip("numpy")
 
 from ml_models.deep_rl_agent_v22 import DeepRLTradingAgent
+from ml_models.reward_calculator import SignConsistentShapedRewardCalculator
 
 
 def test_build_state_uses_normalized_symbol_performance_for_broker_suffixes(tmp_path):
@@ -34,3 +35,52 @@ def test_symbol_head_warmup_uses_normalized_broker_symbol_keys(tmp_path):
     )
 
     assert agent._inference_symbol_key("XAUUSD.r") == "XAUUSD"
+
+
+def test_reward_for_profitable_trade_stays_positive_despite_penalties():
+    calc = SignConsistentShapedRewardCalculator()
+    calc.peak_equity = 12000
+
+    reward = calc.calculate_trade_reward(
+        pnl=18.36,
+        pnl_pct=0.0017,
+        equity=10700,
+        hold_bars=120,
+        regime="QUIET",
+        rr_ratio=1.0,
+        symbol="BTCUSDm",
+    )
+
+    assert reward > 0
+
+
+def test_reward_for_losing_trade_stays_negative_despite_positive_history():
+    calc = SignConsistentShapedRewardCalculator()
+    for _ in range(12):
+        calc.calculate_trade_reward(
+            pnl=10,
+            pnl_pct=0.001,
+            equity=11000,
+            hold_bars=1,
+            regime="TRENDING",
+            rr_ratio=2.0,
+            symbol="EURUSDm",
+        )
+
+    reward = calc.calculate_trade_reward(
+        pnl=-2,
+        pnl_pct=-0.0002,
+        equity=11000,
+        hold_bars=1,
+        regime="TRENDING",
+        rr_ratio=2.0,
+        symbol="EURUSDm",
+    )
+
+    assert reward < 0
+
+
+def test_deep_rl_v22_uses_sign_consistent_reward_calculator(tmp_path):
+    agent = DeepRLTradingAgent(model_dir=str(tmp_path), batch_size=4)
+
+    assert isinstance(agent.reward_calculator, SignConsistentShapedRewardCalculator)
