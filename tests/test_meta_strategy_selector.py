@@ -7,6 +7,7 @@ from strategy.meta_strategy_selector import (
     LiquiditySweepReversalStrategy,
     MetaStrategySelector,
     RangingMeanReversionStrategy,
+    RegimeAdaptiveEntryStrategy,
 )
 from backtest.walk_forward import DemoForwardGate, WalkForwardValidator
 
@@ -368,3 +369,79 @@ def test_liquidity_sweep_diagnostics_include_strategy_name():
     }])
     selected = MetaStrategySelector().apply(df).iloc[0]
     assert selected["entry_strategy"] == "liquidity_sweep_reversal"
+
+
+def test_regime_adaptive_preserves_sweep_strategy_name_when_routed():
+    df = _frame([{
+        "regime": "RANGING",
+        "market_context": "RANGING",
+        "context_strategy": "ranging_mean_reversion",
+        "liq_sweep_low": 1,
+        "rsi": 42,
+        "quality_score": 80,
+        "min_quality_score": 70,
+        "ict_score": 3,
+    }])
+
+    candidate = RegimeAdaptiveEntryStrategy().evaluate(df, 0)
+
+    assert candidate is not None
+    assert candidate.strategy == "liquidity_sweep_reversal"
+
+
+def test_liquidity_sweep_reversal_buy_allowed_near_resistance_when_sweep_matches():
+    df = _frame([{
+        "regime": "RANGING",
+        "market_context": "RANGING",
+        "context_strategy": "ranging_mean_reversion",
+        "liq_sweep_low": 1,
+        "near_supply_ob": 0.002,
+        "rsi": 42,
+        "quality_score": 80,
+        "min_quality_score": 70,
+        "ict_score": 3,
+    }])
+
+    selected = MetaStrategySelector().apply(df).iloc[0]
+
+    assert selected["signal"] == 1
+    assert selected["entry_strategy"] == "liquidity_sweep_reversal"
+
+
+def test_liquidity_sweep_reversal_sell_allowed_near_support_when_sweep_matches():
+    df = _frame([{
+        "regime": "RANGING",
+        "market_context": "RANGING",
+        "context_strategy": "ranging_mean_reversion",
+        "liq_sweep_high": 1,
+        "near_demand_ob": 0.002,
+        "near_bull_fvg": 0.002,
+        "rsi": 58,
+        "quality_score": 80,
+        "min_quality_score": 70,
+        "ict_score": 3,
+    }])
+
+    selected = MetaStrategySelector().apply(df).iloc[0]
+
+    assert selected["signal"] == -1
+    assert selected["entry_strategy"] == "liquidity_sweep_reversal"
+
+
+def test_liquidity_sweep_reversal_near_sr_blocked_without_matching_sweep_direction():
+    df = _frame([{
+        "regime": "RANGING",
+        "market_context": "RANGING",
+        "context_strategy": "ranging_mean_reversion",
+        "liq_sweep_high": 1,
+        "near_supply_ob": 0.002,
+        "rsi": 58,
+        "quality_score": 80,
+        "min_quality_score": 70,
+        "ict_score": 3,
+    }])
+
+    selected = MetaStrategySelector().apply(df).iloc[0]
+
+    assert selected["signal"] == 0
+    assert selected["entry_strategy"] == "none"

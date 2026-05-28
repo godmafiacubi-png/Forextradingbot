@@ -248,11 +248,12 @@ class RegimeAdaptiveEntryStrategy:
         if regime in {"RANGING", "QUIET"} or adx < 22:
             candidate = self.sweep_strategy.evaluate(df, index) or self.ranging_strategy.evaluate(df, index)
             if candidate is not None:
+                strategy_name = "liquidity_sweep_reversal" if candidate.strategy == "liquidity_sweep_reversal" else self.name
                 return EntryCandidate(
                     candidate.signal,
                     candidate.confidence,
                     candidate.ict_score,
-                    self.name,
+                    strategy_name,
                     f"{regime.lower()} routed to {candidate.strategy}",
                 ).clipped()
             return None
@@ -327,6 +328,12 @@ class MetaStrategySelector:
     def _candidate_allowed_near_sr(self, row, candidate):
         if candidate is None or candidate.signal == 0:
             return False
+
+        if candidate.strategy == "liquidity_sweep_reversal":
+            if candidate.signal > 0 and _flag(row, "liq_sweep_low"):
+                return True
+            if candidate.signal < 0 and _flag(row, "liq_sweep_high"):
+                return True
 
         if not self._near_sr_against_signal(row, candidate.signal):
             return True
@@ -405,8 +412,8 @@ class MetaStrategySelector:
             base = None
         candidates = [c for c in (
             base,
-            self.regime_adaptive.evaluate(df, index),
             self.sweep.evaluate(df, index),
+            self.regime_adaptive.evaluate(df, index),
             self.ranging.evaluate(df, index),
             self.breakout.evaluate(df, index),
         ) if c is not None and c.signal != 0 and self._ml_allows_candidate(row, c) and self._candidate_allowed_near_sr(row, c)]
