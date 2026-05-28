@@ -167,14 +167,78 @@ class BreakoutRetestStrategy:
         return None
 
 
+class LiquiditySweepReversalStrategy:
+    """Conservative sweep-reversal setup for range/quiet market context."""
+
+    name = "liquidity_sweep_reversal"
+
+    def _spread_ok(self, row):
+        spread_ok = row.get("spread_ok")
+        if spread_ok is not None:
+            return bool(spread_ok)
+        spread = _num(row, "spread", 0.0)
+        max_spread = row.get("max_spread")
+        if max_spread is None:
+            max_spread = row.get("spread_cap")
+        if max_spread is None:
+            return True
+        return spread <= float(max_spread)
+
+    def _rsi_recovering_from_oversold(self, df, index):
+        if index <= 0:
+            return False
+        prev_rsi = _num(df.iloc[index - 1], "rsi", 50.0)
+        rsi = _num(df.iloc[index], "rsi", 50.0)
+        return prev_rsi <= 30.0 and rsi > prev_rsi
+
+    def _rsi_rejecting_from_overbought(self, df, index):
+        if index <= 0:
+            return False
+        prev_rsi = _num(df.iloc[index - 1], "rsi", 50.0)
+        rsi = _num(df.iloc[index], "rsi", 50.0)
+        return prev_rsi >= 70.0 and rsi < prev_rsi
+
+    def evaluate(self, df, index):
+        row = df.iloc[index]
+        htf = int(_num(row, "htf_trend", 0))
+        rsi = _num(row, "rsi", 50.0)
+        ict_score = int(_num(row, "ict_score", 0))
+        quality = _num(row, "quality_score", _num(row, "context_min_quality_score", _num(row, "min_quality_score", 0)))
+        min_quality = int(_num(row, "min_quality_score", _num(row, "context_min_quality_score", 0)))
+        market_context = normalize_regime_name(row.get("market_context", row.get("regime", row.get("market_regime", "GLOBAL"))))
+        context_strategy = str(row.get("context_strategy", "") or "").strip().lower()
+        allowed_context = market_context in {"RANGING", "QUIET"} or context_strategy == "ranging_mean_reversion"
+        if not allowed_context or not self._spread_ok(row) or quality < min_quality:
+            return None
+
+        buy_ok = _flag(row, "liq_sweep_low") and (rsi <= 45.0 or self._rsi_recovering_from_oversold(df, index)) and htf > -2
+        sell_ok = _flag(row, "liq_sweep_high") and (rsi >= 55.0 or self._rsi_rejecting_from_overbought(df, index)) and htf < 2
+
+        if buy_ok == sell_ok:
+            return None
+
+        direction = 1 if buy_ok else -1
+        reason = "sweep_low reversal" if direction > 0 else "sweep_high reversal"
+        confidence = 0.60
+        if ict_score >= 3:
+            confidence += 0.05
+        if (direction > 0 and market_context in {"RANGING", "QUIET"}) or (direction < 0 and market_context in {"RANGING", "QUIET"}):
+            confidence += 0.05
+        m30_conf = int(_num(row, "m30_confirmed", 0)) == 1 or bool(row.get("m30_aligned", False))
+        if m30_conf:
+            confidence += 0.03
+        return EntryCandidate(direction, min(confidence, 0.72), max(ict_score, 2), self.name, reason).clipped()
+
+
 class RegimeAdaptiveEntryStrategy:
     """Route entry generation to the strategy best suited for the current regime."""
 
     name = "regime_adaptive_entry"
 
-    def __init__(self, ranging_strategy=None, breakout_strategy=None):
+    def __init__(self, ranging_strategy=None, breakout_strategy=None, sweep_strategy=None):
         self.ranging_strategy = ranging_strategy or RangingMeanReversionStrategy()
         self.breakout_strategy = breakout_strategy or BreakoutRetestStrategy()
+        self.sweep_strategy = sweep_strategy or LiquiditySweepReversalStrategy()
 
     def evaluate(self, df, index):
         row = df.iloc[index]
@@ -182,7 +246,7 @@ class RegimeAdaptiveEntryStrategy:
         adx = _num(row, "adx", 0.0)
 
         if regime in {"RANGING", "QUIET"} or adx < 22:
-            candidate = self.ranging_strategy.evaluate(df, index)
+            candidate = self.sweep_strategy.evaluate(df, index) or self.ranging_strategy.evaluate(df, index)
             if candidate is not None:
                 return EntryCandidate(
                     candidate.signal,
@@ -219,7 +283,8 @@ class MetaStrategySelector:
         self.override_margin = override_margin
         self.ranging = RangingMeanReversionStrategy()
         self.breakout = BreakoutRetestStrategy()
-        self.regime_adaptive = RegimeAdaptiveEntryStrategy(self.ranging, self.breakout)
+        self.sweep = LiquiditySweepReversalStrategy()
+        self.regime_adaptive = RegimeAdaptiveEntryStrategy(self.ranging, self.breakout, self.sweep)
 
     def _score(self, candidate):
         return candidate.confidence + min(candidate.ict_score, 4) * 0.03
@@ -341,6 +406,7 @@ class MetaStrategySelector:
         candidates = [c for c in (
             base,
             self.regime_adaptive.evaluate(df, index),
+            self.sweep.evaluate(df, index),
             self.ranging.evaluate(df, index),
             self.breakout.evaluate(df, index),
         ) if c is not None and c.signal != 0 and self._ml_allows_candidate(row, c) and self._candidate_allowed_near_sr(row, c)]
