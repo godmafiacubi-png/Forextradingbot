@@ -69,3 +69,14 @@ def test_trade_journal_writes_csv_and_sqlite(tmp_path):
         ).fetchone()
     assert count == 11
     assert row == (10010.0, 120.0, 2.5, 0.72, 0.25, "TREND", "NewYork", "quality=A")
+
+
+def test_trade_journal_has_event_checks_sqlite_then_csv(tmp_path):
+    csv_path = tmp_path / "trades.csv"
+    sqlite_path = tmp_path / "trades.sqlite3"
+    journal = TradeJournal(csv_path=csv_path, sqlite_path=sqlite_path)
+
+    journal.log_open(123, "XAUUSDm", "BUY", 0.1, 2350.0)
+
+    assert journal.has_event(123, "OPEN") is True
+    assert journal.has_event(123, "CLOSE") is False

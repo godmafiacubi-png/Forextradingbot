@@ -181,6 +181,36 @@ class TradeJournal:
                 if field not in existing:
                     conn.execute(f"ALTER TABLE trade_journal ADD COLUMN {field} {sql_type}")
 
+    def has_event(self, ticket, event_type):
+        """Return True when the current journal already has an event for a ticket."""
+        ticket_value = "" if ticket is None else str(ticket)
+        if self.sqlite_path and self.sqlite_path.exists():
+            try:
+                with sqlite3.connect(self.sqlite_path) as conn:
+                    row = conn.execute(
+                        """
+                        SELECT 1
+                        FROM trade_journal
+                        WHERE ticket = ? AND event_type = ?
+                        LIMIT 1
+                        """,
+                        (ticket_value, event_type),
+                    ).fetchone()
+                return row is not None
+            except sqlite3.Error:
+                # Fall back to CSV below if the SQLite journal is unavailable or
+                # from an older/incomplete test fixture.
+                pass
+
+        if not self.csv_path or not self.csv_path.exists():
+            return False
+
+        with self.csv_path.open(newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                if row.get("ticket") == ticket_value and row.get("event_type") == event_type:
+                    return True
+        return False
+
     def append_event(self, event_type, ticket=None, symbol="", side="", volume=None,
                      price=None, sl=None, tp=None, pnl=None, balance=None, equity=None,
                      spread=None, slippage_points=None, confidence=None, risk_pct=None,

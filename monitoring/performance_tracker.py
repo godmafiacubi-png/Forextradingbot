@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 
-from execution.trade_logger import TradeJournal
+from execution.trade_logger import EVENT_OPEN, JOURNAL_FIELDS, TradeJournal
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,50 @@ class PerformanceTracker:
         }
         logger.info(f"[TRACKER] Tracked #{ticket} {side} {symbol} {size}lots @{price:.5f}; OPEN journal owned by OrderManager")
 
-    def close_trade(self, ticket, exit_price, actual_pnl=None):
+    @staticmethod
+    def _first_present(mapping, *keys, default=None):
+        for key in keys:
+            value = mapping.get(key)
+            if value is not None and value != "":
+                return value
+        return default
+
+    @staticmethod
+    def _journal_context(context, exclude=()):
+        excluded = set(exclude)
+        return {
+            key: value
+            for key, value in context.items()
+            if key in JOURNAL_FIELDS and key not in excluded
+        }
+
+    def _backfill_open_if_missing(self, ticket, trade, context):
+        has_event = getattr(self.journal, "has_event", None)
+        if not callable(has_event) or has_event(ticket, EVENT_OPEN):
+            return
+
+        backfill_context = self._journal_context(
+            context,
+            exclude={
+                "ticket", "symbol", "side", "volume", "price", "sl", "tp",
+                "pnl", "source", "comment", "reason",
+            },
+        )
+        self.journal.log_open(
+            ticket,
+            self._first_present(context, "symbol", default=trade['symbol']),
+            self._first_present(context, "side", "signal", default=trade['side']),
+            self._first_present(context, "volume", "lots", "size", default=trade['size']),
+            self._first_present(context, "entry_price", "price", default=trade['entry_price']),
+            sl=context.get("sl"),
+            tp=context.get("tp"),
+            comment="synthetic open reconstructed from active trade metadata",
+            source="lifecycle_backfill",
+            reason="missing_open_event",
+            **backfill_context,
+        )
+
+    def close_trade(self, ticket, exit_price, actual_pnl=None, **context):
         """
         Log trade closed
         actual_pnl: PnL จริงจาก MT5 (prev.profit)
@@ -62,9 +105,17 @@ class PerformanceTracker:
             'close_time': datetime.now()
         })
 
+        self._backfill_open_if_missing(ticket, trade, context)
+
+        close_context = self._journal_context(
+            context,
+            exclude={"ticket", "symbol", "side", "volume", "price", "sl", "tp", "pnl", "comment", "source"},
+        )
         self.journal.log_close(
             ticket, trade['symbol'], trade['side'], trade['size'], exit_price, pnl,
-            comment="performance_tracker", source="performance_tracker",
+            comment=context.get("comment", "performance_tracker"),
+            source=context.get("source", "performance_tracker"),
+            **close_context,
         )
         result = "WIN" if pnl > 0 else "LOSS"
         logger.info(f"[TRACKER] Closed #{ticket} {trade['symbol']} {trade['side']} {result} PnL=${pnl:.2f}")
