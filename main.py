@@ -265,7 +265,7 @@ class TradingBot:
                 trade_journal=self.trade_journal,
             )
             self.monitor = SimpleMonitor()
-            self.tracker = PerformanceTracker()
+            self.tracker = PerformanceTracker(journal=self.trade_journal)
             self.telegram = TelegramAlerts(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
             self.expectancy_tracker = ExpectancyTracker()
 
@@ -414,7 +414,20 @@ class TradingBot:
                     self.daily_pnl += pnl
 
                     exit_price = prev.price_current if hasattr(prev, 'price_current') else prev.price_open
-                    self.tracker.close_trade(ticket, exit_price, actual_pnl=pnl)
+                    active_meta = self.active_trades.get(ticket, {})
+                    close_context = {
+                        key: active_meta.get(key)
+                        for key in (
+                            'entry_strategy', 'strategy_confidence', 'quality_score', 'quality_grade',
+                            'ml_prob', 'ict_score', 'adx', 'rsi', 'planned_rr', 'execution_rr',
+                            'regime', 'session', 'market_context', 'context_bias', 'context_strategy',
+                            'context_allow_trade', 'context_reason', 'context_risk_mult', 'context_tp_rr',
+                            'context_sl_atr_mult', 'context_min_quality_score', 'max_slippage_points',
+                            'sl', 'tp', 'lots', 'confidence', 'entry_price',
+                        )
+                        if active_meta.get(key) is not None
+                    }
+                    self.tracker.close_trade(ticket, exit_price, actual_pnl=pnl, **close_context)
 
                     if ticket not in self.active_trades:
                         continue
@@ -456,6 +469,12 @@ class TradingBot:
                             q_value=rl_result.get('q_value'),
                             action=rl_result.get('action'),
                             confidence=active_meta.get('confidence'),
+                            entry_strategy=active_meta.get('entry_strategy'),
+                            market_context=active_meta.get('market_context'),
+                            planned_rr=active_meta.get('planned_rr'),
+                            execution_rr=active_meta.get('execution_rr'),
+                            quality_score=active_meta.get('quality_score'),
+                            regime=active_meta.get('regime'),
                             comment=(
                                 f"pnl={pnl:.2f} rl_reward={rl_result.get('rl_reward')} "
                                 f"q_value={rl_result.get('q_value')} action={rl_result.get('action')} "
@@ -1143,8 +1162,30 @@ class TradingBot:
                 self.active_trades[ticket] = {
                     'symbol': symbol, 'signal': signal_name, 'price': price,
                     'sl': sl, 'tp': tp, 'lots': lot, 'confidence': confidence,
+                    'entry_price': price,
                     'time': datetime.now(), 'quality': quality_score, 'grade': quality_grade,
-                    'regime': regime_name,
+                    'entry_strategy': diagnostics.get('entry_strategy'),
+                    'strategy_confidence': diagnostics.get('strategy_confidence'),
+                    'quality_score': diagnostics.get('quality_score'),
+                    'quality_grade': diagnostics.get('quality_grade'),
+                    'ml_prob': diagnostics.get('ml_prob'),
+                    'ict_score': diagnostics.get('ict_score'),
+                    'adx': diagnostics.get('adx'),
+                    'rsi': diagnostics.get('rsi'),
+                    'planned_rr': diagnostics.get('planned_rr'),
+                    'execution_rr': diagnostics.get('execution_rr', round(float(planned_rr), 4)),
+                    'regime': diagnostics.get('regime'),
+                    'session': diagnostics.get('session'),
+                    'market_context': diagnostics.get('market_context'),
+                    'context_bias': diagnostics.get('context_bias'),
+                    'context_strategy': diagnostics.get('context_strategy'),
+                    'context_allow_trade': diagnostics.get('context_allow_trade'),
+                    'context_reason': diagnostics.get('context_reason'),
+                    'context_risk_mult': diagnostics.get('context_risk_mult'),
+                    'context_tp_rr': diagnostics.get('context_tp_rr'),
+                    'context_sl_atr_mult': diagnostics.get('context_sl_atr_mult'),
+                    'context_min_quality_score': diagnostics.get('context_min_quality_score'),
+                    'max_slippage_points': diagnostics.get('max_slippage_points'),
                     'exit_policy': exit_policy,
                     'risk_mult': exit_policy.get('risk_mult', 1.0),
                 }

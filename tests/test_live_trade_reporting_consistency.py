@@ -60,10 +60,18 @@ def test_filled_trade_creates_exactly_one_open_event(monkeypatch, tmp_path):
     )
     tracker.log_trade(ticket, "EURUSDm", "BUY", 1.1002, 0.1)
 
+    tracker.close_trade(ticket, 1.101, actual_pnl=8.0)
+
     rows = _rows(journal_path)
+    lifecycle_rows = [
+        row for row in rows
+        if row["event_type"] == "ORDER_ATTEMPT" or row["ticket"] == str(ticket)
+    ]
+    assert [row["event_type"] for row in lifecycle_rows] == ["ORDER_ATTEMPT", "ORDER_FILLED", "OPEN", "CLOSE"]
     open_rows = [row for row in rows if row["event_type"] == "OPEN" and row["ticket"] == str(ticket)]
     assert len(open_rows) == 1
     assert open_rows[0]["source"] == "order_manager"
+    assert lifecycle_rows[-1]["source"] == "performance_tracker"
 
 
 def test_positive_close_pnl_appears_in_forward_report():
@@ -74,6 +82,77 @@ def test_positive_close_pnl_appears_in_forward_report():
     assert metrics["net_pnl"] == 42.5
     assert metrics["total_trades"] == 1
     assert "net_pnl: 42.50" in render_report(metrics)
+
+
+def test_performance_tracker_uses_injected_shared_journal(tmp_path):
+    journal = TradeJournal(csv_path=tmp_path / "trades.csv")
+    tracker = PerformanceTracker(journal=journal)
+
+    assert tracker.journal is journal
+
+
+def test_close_trade_preserves_diagnostics_fields(tmp_path):
+    journal_path = tmp_path / "trades.csv"
+    journal = TradeJournal(csv_path=journal_path)
+    tracker = PerformanceTracker(journal=journal)
+
+    journal.log_open(900, "EURUSDm", "BUY", 0.2, 1.1, source="order_manager")
+    tracker.log_trade(900, "EURUSDm", "BUY", 1.1, 0.2)
+    tracker.close_trade(
+        900,
+        1.105,
+        actual_pnl=25.0,
+        entry_strategy="liquidity_sweep_reversal",
+        market_context="TREND",
+        planned_rr=2.0,
+        execution_rr=1.8,
+        quality_score=82,
+        regime="TREND",
+    )
+
+    close_row = [row for row in _rows(journal_path) if row["event_type"] == "CLOSE"][0]
+    assert close_row["entry_strategy"] == "liquidity_sweep_reversal"
+    assert close_row["market_context"] == "TREND"
+    assert close_row["planned_rr"] == "2.0"
+    assert close_row["execution_rr"] == "1.8"
+    assert close_row["quality_score"] == "82"
+    assert close_row["regime"] == "TREND"
+
+
+def test_close_trade_backfills_synthetic_open_when_missing(tmp_path):
+    journal_path = tmp_path / "trades.csv"
+    journal = TradeJournal(csv_path=journal_path)
+    tracker = PerformanceTracker(journal=journal)
+
+    tracker.log_trade(901, "EURUSDm", "BUY", 1.1, 0.2)
+    tracker.close_trade(
+        901,
+        1.105,
+        actual_pnl=25.0,
+        entry_strategy="breakout",
+        market_context="RANGE",
+        planned_rr=1.5,
+        execution_rr=1.4,
+        quality_score=76,
+        regime="RANGE",
+        entry_price=1.1001,
+        lots=0.2,
+        sl=1.095,
+        tp=1.108,
+    )
+
+    rows = _rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["OPEN", "CLOSE"]
+    open_row = rows[0]
+    assert open_row["source"] == "lifecycle_backfill"
+    assert open_row["comment"] == "synthetic open reconstructed from active trade metadata"
+    assert open_row["reason"] == "missing_open_event"
+    assert open_row["price"] == "1.1001"
+    assert open_row["volume"] == "0.2"
+    assert open_row["sl"] == "1.095"
+    assert open_row["tp"] == "1.108"
+    assert open_row["entry_strategy"] == "breakout"
+    assert rows[1]["event_type"] == "CLOSE"
 
 
 def test_duplicate_open_tracking_does_not_count_as_two_dashboard_trades(tmp_path):
@@ -90,7 +169,6 @@ def test_duplicate_open_tracking_does_not_count_as_two_dashboard_trades(tmp_path
     assert stats["total_pnl"] == 10.0
 
 
-
 def test_deep_rl_result_logs_pnl_reward_q_action_confidence_together(tmp_path):
     journal_path = tmp_path / "trades.csv"
     journal = TradeJournal(csv_path=journal_path)
@@ -104,6 +182,12 @@ def test_deep_rl_result_logs_pnl_reward_q_action_confidence_together(tmp_path):
         q_value=0.33,
         action=1,
         confidence=0.81,
+        entry_strategy="liquidity_sweep_reversal",
+        market_context="TREND",
+        planned_rr=2.0,
+        execution_rr=1.8,
+        quality_score=88,
+        regime="TREND",
         comment="pnl=12.25 rl_reward=1.75 q_value=0.33 action=1 confidence=0.81",
     )
 
@@ -115,3 +199,9 @@ def test_deep_rl_result_logs_pnl_reward_q_action_confidence_together(tmp_path):
     assert row["q_value"] == "0.33"
     assert row["action"] == "1"
     assert row["confidence"] == "0.81"
+    assert row["entry_strategy"] == "liquidity_sweep_reversal"
+    assert row["market_context"] == "TREND"
+    assert row["planned_rr"] == "2.0"
+    assert row["execution_rr"] == "1.8"
+    assert row["quality_score"] == "88"
+    assert row["regime"] == "TREND"
