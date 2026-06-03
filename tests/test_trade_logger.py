@@ -80,3 +80,27 @@ def test_trade_journal_has_event_checks_sqlite_then_csv(tmp_path):
 
     assert journal.has_event(123, "OPEN") is True
     assert journal.has_event(123, "CLOSE") is False
+
+
+def test_active_trade_metadata_survives_restart_load(tmp_path):
+    from execution.trade_logger import ActiveTradeStore
+
+    path = tmp_path / "active_trades.json"
+    store = ActiveTradeStore(path)
+    store.upsert(123, {
+        "symbol": "EURUSDm",
+        "side": "BUY",
+        "volume": 0.2,
+        "entry_price": 1.1002,
+        "sl": 1.099,
+        "tp": 1.104,
+        "entry_strategy": "breakout",
+        "market_context": "TREND",
+    })
+
+    restarted_store = ActiveTradeStore(path)
+    active_trades = restarted_store.load()
+
+    assert active_trades[123]["symbol"] == "EURUSDm"
+    assert active_trades[123]["entry_strategy"] == "breakout"
+    assert active_trades[123]["market_context"] == "TREND"

@@ -205,3 +205,44 @@ def test_deep_rl_result_logs_pnl_reward_q_action_confidence_together(tmp_path):
     assert row["execution_rr"] == "1.8"
     assert row["quality_score"] == "88"
     assert row["regime"] == "TREND"
+
+
+def test_duplicate_close_for_ticket_is_not_appended(tmp_path):
+    journal_path = tmp_path / "trades.csv"
+    journal = TradeJournal(csv_path=journal_path)
+    tracker = PerformanceTracker(journal=journal)
+
+    journal.log_open(902, "EURUSDm", "BUY", 0.1, 1.1, source="order_manager")
+    journal.log_close(902, "EURUSDm", "BUY", 0.1, 1.101, 10.0, source="order_manager")
+    tracker.log_trade(902, "EURUSDm", "BUY", 1.1, 0.1)
+    tracker.close_trade(902, 1.101, actual_pnl=10.0)
+
+    close_rows = [row for row in _rows(journal_path) if row["event_type"] == "CLOSE"]
+    assert len(close_rows) == 1
+    assert close_rows[0]["source"] == "order_manager"
+
+
+def test_duplicate_rl_trade_result_for_ticket_is_not_appended(tmp_path):
+    journal_path = tmp_path / "trades.csv"
+    journal = TradeJournal(csv_path=journal_path)
+
+    journal.log_rl_trade_result(903, "EURUSDm", "BUY", pnl=10.0, rl_reward=1.0)
+    journal.log_rl_trade_result(903, "EURUSDm", "BUY", pnl=10.0, rl_reward=1.0)
+
+    result_rows = [row for row in _rows(journal_path) if row["event_type"] == "RL_TRADE_RESULT"]
+    assert len(result_rows) == 1
+
+
+def test_performance_tracker_close_removes_active_trade_metadata(tmp_path):
+    from execution.trade_logger import ActiveTradeStore
+
+    journal = TradeJournal(csv_path=tmp_path / "trades.csv")
+    store = ActiveTradeStore(tmp_path / "active_trades.json")
+    store.upsert(904, {"symbol": "EURUSDm", "side": "BUY", "volume": 0.1, "entry_price": 1.1})
+    tracker = PerformanceTracker(journal=journal, active_trade_store=store)
+    journal.log_open(904, "EURUSDm", "BUY", 0.1, 1.1)
+    tracker.log_trade(904, "EURUSDm", "BUY", 1.1, 0.1)
+
+    tracker.close_trade(904, 1.101, actual_pnl=10.0)
+
+    assert store.load() == {}
