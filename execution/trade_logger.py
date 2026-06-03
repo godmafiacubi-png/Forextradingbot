@@ -5,6 +5,8 @@ edge, drawdown, profit factor, and execution-quality criteria before going live.
 """
 
 import csv
+import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -68,6 +70,77 @@ EVENT_PARTIAL_CLOSE = "PARTIAL_CLOSE"
 EVENT_CLOSE = "CLOSE"
 EVENT_RISK_BLOCKED = "RISK_BLOCKED"
 EVENT_NEWS_BLOCKED = "NEWS_BLOCKED"
+
+
+class ActiveTradeStore:
+    """Small JSON-backed store for metadata needed throughout a trade lifecycle."""
+
+    def __init__(self, path="journal/active_trades.json"):
+        self.path = Path(path) if path else None
+        if self.path:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def _ticket_key(ticket):
+        return str(ticket)
+
+    @staticmethod
+    def _runtime_ticket(ticket):
+        try:
+            return int(ticket)
+        except (TypeError, ValueError):
+            return ticket
+
+    @staticmethod
+    def _json_safe(value):
+        if isinstance(value, dict):
+            return {str(key): ActiveTradeStore._json_safe(item) for key, item in value.items()}
+        if isinstance(value, (list, tuple, set)):
+            return [ActiveTradeStore._json_safe(item) for item in value]
+        if isinstance(value, datetime):
+            return value.isoformat()
+        if value is None or isinstance(value, (str, int, float, bool)):
+            return value
+        return str(value)
+
+    def load(self):
+        if not self.path or not self.path.exists():
+            return {}
+        try:
+            with self.path.open(encoding="utf-8") as fh:
+                payload = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return {self._runtime_ticket(ticket): metadata for ticket, metadata in payload.items() if isinstance(metadata, dict)}
+
+    def save(self, active_trades):
+        if not self.path:
+            return
+        payload = {self._ticket_key(ticket): self._json_safe(metadata) for ticket, metadata in active_trades.items()}
+        temp_path = self.path.with_suffix(f"{self.path.suffix}.tmp")
+        with temp_path.open("w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+        os.replace(temp_path, self.path)
+
+    def upsert(self, ticket, metadata):
+        active_trades = self.load()
+        current = dict(active_trades.get(self._runtime_ticket(ticket), {}))
+        current.update(metadata or {})
+        active_trades[self._runtime_ticket(ticket)] = current
+        self.save(active_trades)
+        return current
+
+    def get(self, ticket, default=None):
+        return self.load().get(self._runtime_ticket(ticket), default)
+
+    def remove(self, ticket):
+        active_trades = self.load()
+        removed = active_trades.pop(self._runtime_ticket(ticket), None)
+        self.save(active_trades)
+        return removed
 
 
 class TradeJournal:
@@ -315,11 +388,15 @@ class TradeJournal:
                                  comment=comment, **context)
 
     def log_close(self, ticket, symbol="", side="", volume=None, price=None, pnl=None, comment="", **context):
+        if self.has_event(ticket, EVENT_CLOSE):
+            return None
         return self.append_event(EVENT_CLOSE, ticket, symbol, side, volume, price, None, None, pnl,
                                  comment=comment, **context)
 
     def log_rl_trade_result(self, ticket, symbol="", side="", pnl=None, rl_reward=None, q_value=None,
                             action="", confidence=None, comment="", **context):
+        if self.has_event(ticket, "RL_TRADE_RESULT"):
+            return None
         return self.append_event("RL_TRADE_RESULT", ticket, symbol, side, pnl=pnl,
                                  confidence=confidence, source="deep_rl", rl_reward=rl_reward,
                                  q_value=q_value, action=action, comment=comment, **context)

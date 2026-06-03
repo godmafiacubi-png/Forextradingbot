@@ -1,7 +1,7 @@
 from datetime import datetime
 import logging
 
-from execution.trade_logger import EVENT_OPEN, JOURNAL_FIELDS, TradeJournal
+from execution.trade_logger import EVENT_CLOSE, EVENT_OPEN, JOURNAL_FIELDS, TradeJournal
 
 logger = logging.getLogger(__name__)
 
@@ -9,11 +9,12 @@ logger = logging.getLogger(__name__)
 class PerformanceTracker:
     """Track bot performance — ใช้ PnL จริงจาก MT5"""
 
-    def __init__(self, journal=None):
+    def __init__(self, journal=None, active_trade_store=None):
         self.trades = []
         self.open_trades = {}
         self.balance_history = []
         self.journal = journal if journal is not None else TradeJournal()
+        self.active_trade_store = active_trade_store
 
     def log_trade(self, ticket, symbol, side, price, size):
         """Log new trade opened"""
@@ -105,18 +106,24 @@ class PerformanceTracker:
             'close_time': datetime.now()
         })
 
-        self._backfill_open_if_missing(ticket, trade, context)
-
-        close_context = self._journal_context(
-            context,
-            exclude={"ticket", "symbol", "side", "volume", "price", "sl", "tp", "pnl", "comment", "source"},
-        )
-        self.journal.log_close(
-            ticket, trade['symbol'], trade['side'], trade['size'], exit_price, pnl,
-            comment=context.get("comment", "performance_tracker"),
-            source=context.get("source", "performance_tracker"),
-            **close_context,
-        )
+        has_event = getattr(self.journal, "has_event", None)
+        close_exists = callable(has_event) and has_event(ticket, EVENT_CLOSE)
+        if close_exists:
+            logger.info(f"[TRACKER] CLOSE already journaled for #{ticket}; duplicate CLOSE skipped")
+        else:
+            self._backfill_open_if_missing(ticket, trade, context)
+            close_context = self._journal_context(
+                context,
+                exclude={"ticket", "symbol", "side", "volume", "price", "sl", "tp", "pnl", "comment", "source"},
+            )
+            self.journal.log_close(
+                ticket, trade['symbol'], trade['side'], trade['size'], exit_price, pnl,
+                comment=context.get("comment", "performance_tracker"),
+                source=context.get("source", "performance_tracker"),
+                **close_context,
+            )
+        if self.active_trade_store is not None:
+            self.active_trade_store.remove(ticket)
         result = "WIN" if pnl > 0 else "LOSS"
         logger.info(f"[TRACKER] Closed #{ticket} {trade['symbol']} {trade['side']} {result} PnL=${pnl:.2f}")
 

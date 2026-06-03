@@ -405,9 +405,10 @@ def test_close_order_journals_close_event(monkeypatch, tmp_path):
 
     assert manager.close_order(77) is True
     rows = _journal_rows(journal_path)
-    assert [row["event_type"] for row in rows] == ["CLOSE"]
-    assert rows[0]["ticket"] == "77"
-    assert rows[0]["side"] == "BUY"
+    assert [row["event_type"] for row in rows] == ["OPEN", "CLOSE"]
+    assert rows[0]["source"] == "lifecycle_backfill"
+    assert rows[1]["ticket"] == "77"
+    assert rows[1]["side"] == "BUY"
 
 
 class _RiskGuardSpy:
@@ -682,8 +683,133 @@ def test_close_event_marks_pnl_unavailable_explicitly(monkeypatch, tmp_path):
     manager = module.OrderManager(_BtcConnector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
 
     assert manager.close_order(101) is True
-    row = _journal_rows(journal_path)[0]
-    assert row["event_type"] == "CLOSE"
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["OPEN", "CLOSE"]
+    row = rows[1]
     assert row["pnl"] == ""
     assert row["reason"] == "pnl_unavailable"
     assert row["comment"] == "pnl_unavailable"
+
+
+def test_missing_open_after_successful_fill_is_written_immediately(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    class DropFirstOpenJournal(TradeJournal):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.drop_open = True
+
+        def log_open(self, *args, **kwargs):
+            if self.drop_open:
+                self.drop_open = False
+                return None
+            return super().log_open(*args, **kwargs)
+
+    journal_path = tmp_path / "trades.csv"
+    journal = DropFirstOpenJournal(csv_path=journal_path)
+    manager = module.OrderManager(_Connector(), dry_run=False, trade_journal=journal)
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102)
+
+    assert ticket == 123
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["ORDER_ATTEMPT", "ORDER_FILLED", "OPEN"]
+    assert rows[-1]["source"] == "lifecycle_backfill"
+    assert rows[-1]["reason"] == "missing_open_event_after_fill"
+
+
+def test_partial_close_includes_active_trade_diagnostics(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(
+        ticket=123, symbol="EURUSDm", type=0, volume=0.2, price_open=1.1,
+        price_current=1.101, sl=1.099, tp=1.104, profit=12.0,
+    )
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+    from execution.trade_logger import ActiveTradeStore, TradeJournal
+
+    journal_path = tmp_path / "trades.csv"
+    store = ActiveTradeStore(tmp_path / "active_trades.json")
+    store.upsert(123, {
+        "symbol": "EURUSDm", "side": "BUY", "volume": 0.2, "entry_price": 1.1,
+        "sl": 1.099, "tp": 1.104, "entry_strategy": "breakout", "market_context": "TREND",
+        "regime": "TREND", "quality_score": 84, "planned_rr": 2.0, "execution_rr": 1.8,
+    })
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path), active_trade_store=store,
+    )
+
+    assert manager.partial_close(123, 0.5) is True
+
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["OPEN", "PARTIAL_CLOSE"]
+    row = rows[-1]
+    assert row["entry_strategy"] == "breakout"
+    assert row["market_context"] == "TREND"
+    assert row["regime"] == "TREND"
+    assert row["quality_score"] == "84"
+    assert row["planned_rr"] == "2.0"
+    assert row["execution_rr"] == "1.8"
+
+
+def test_sl_modified_includes_active_trade_diagnostics(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(
+        ticket=123, symbol="EURUSDm", type=0, volume=0.2, price_open=1.1,
+        price_current=1.101, sl=1.099, tp=1.104, profit=12.0,
+    )
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+    from execution.trade_logger import ActiveTradeStore, TradeJournal
+
+    journal_path = tmp_path / "trades.csv"
+    store = ActiveTradeStore(tmp_path / "active_trades.json")
+    store.upsert(123, {
+        "symbol": "EURUSDm", "side": "BUY", "volume": 0.2, "entry_price": 1.1,
+        "sl": 1.099, "tp": 1.104, "entry_strategy": "breakout", "market_context": "TREND",
+        "regime": "TREND", "quality_score": 84, "planned_rr": 2.0, "execution_rr": 1.8,
+    })
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path), active_trade_store=store,
+    )
+
+    assert manager.modify_sl_tp(123, new_sl=1.0995) is True
+
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["OPEN", "SL_MODIFIED"]
+    row = rows[-1]
+    assert row["entry_strategy"] == "breakout"
+    assert row["market_context"] == "TREND"
+    assert row["regime"] == "TREND"
+    assert row["quality_score"] == "84"
+    assert row["planned_rr"] == "2.0"
+    assert row["execution_rr"] == "1.8"
+
+
+def test_successful_fill_persists_active_trade_metadata(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import ActiveTradeStore, TradeJournal
+
+    journal_path = tmp_path / "trades.csv"
+    store_path = tmp_path / "active_trades.json"
+    store = ActiveTradeStore(store_path)
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path), active_trade_store=store,
+    )
+
+    ticket = manager.place_order(
+        "EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.2, 1.099, 1.102,
+        diagnostics={"entry_strategy": "breakout", "market_context": "TREND", "quality_score": 84},
+    )
+
+    metadata = ActiveTradeStore(store_path).load()[ticket]
+    assert metadata["symbol"] == "EURUSDm"
+    assert metadata["side"] == "BUY"
+    assert metadata["volume"] == 0.2
+    assert metadata["entry_price"] == 1.1002
+    assert metadata["sl"] == 1.099
+    assert metadata["tp"] == 1.102
+    assert metadata["entry_strategy"] == "breakout"
+    assert metadata["market_context"] == "TREND"
+    assert metadata["quality_score"] == 84

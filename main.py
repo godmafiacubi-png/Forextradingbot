@@ -43,7 +43,7 @@ from strategy.smart_filters import (
 from risk_management.position_sizer import PositionSizer
 from risk_management.risk_guard import RiskGuard
 from execution.order_manager import OrderManager
-from execution.trade_logger import TradeJournal
+from execution.trade_logger import ActiveTradeStore, TradeJournal
 from execution.risk_aware_journal import RiskAwareTradeJournal
 from monitoring.simple_dashboard import SimpleMonitor
 from monitoring.performance_tracker import PerformanceTracker
@@ -252,6 +252,8 @@ class TradingBot:
 
             base_journal = TradeJournal(csv_path="journal/trades.csv", sqlite_path="journal/trades.sqlite3")
             self.trade_journal = RiskAwareTradeJournal(base_journal, self.risk_guard)
+            self.active_trade_store = ActiveTradeStore("journal/active_trades.json")
+            loaded_active_trades = self.active_trade_store.load()
 
             self.signal_gen = SignalGenerator(self.ml_model, use_meta_strategy_selector=globals().get('USE_META_STRATEGY_SELECTOR', True))
             self.position_sizer = PositionSizer(POSITION_SIZING_METHOD, ACCOUNT_RISK_PERCENT, MAX_DRAWDOWN_PERCENT, max_lot_size=MAX_LOT_SIZE)
@@ -263,9 +265,10 @@ class TradingBot:
                 magic=ORDER_MAGIC,
                 deviation=ORDER_DEVIATION,
                 trade_journal=self.trade_journal,
+                active_trade_store=self.active_trade_store,
             )
             self.monitor = SimpleMonitor()
-            self.tracker = PerformanceTracker(journal=self.trade_journal)
+            self.tracker = PerformanceTracker(journal=self.trade_journal, active_trade_store=self.active_trade_store)
             self.telegram = TelegramAlerts(TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
             self.expectancy_tracker = ExpectancyTracker()
 
@@ -277,7 +280,14 @@ class TradingBot:
             update_dashboard('execution_mode', 'Dryruns' if DRY_RUN else 'Livetrade')
 
             self.htf_trend = {}
-            self.active_trades = {}
+            self.active_trades = loaded_active_trades
+            for ticket, metadata in self.active_trades.items():
+                symbol = metadata.get('symbol')
+                side = metadata.get('side', metadata.get('signal'))
+                entry_price = metadata.get('entry_price', metadata.get('price'))
+                size = metadata.get('volume', metadata.get('lots'))
+                if symbol and side and entry_price is not None and size is not None:
+                    self.tracker.log_trade(ticket, symbol, side, entry_price, size)
             self.prev_positions = {}
             self.symbol_data_cache = {}
             self.atr_cache = {}
@@ -433,6 +443,7 @@ class TradingBot:
                         continue
 
                     active_meta = self.active_trades.pop(ticket)
+                    self.active_trade_store.remove(ticket)
 
                     self.risk_guard.record_trade_result(pnl)
                     self.adaptive_threshold.record_result(is_win)
@@ -462,7 +473,7 @@ class TradingBot:
                         market_data=sym_data_c,
                         signal_data=sig_data_c,
                     )
-                    if rl_result:
+                    if rl_result and not self.trade_journal.has_event(ticket, "RL_TRADE_RESULT"):
                         self.trade_journal.log_rl_trade_result(
                             ticket, prev.symbol, side, pnl=pnl,
                             rl_reward=rl_result.get('rl_reward'),
@@ -1189,6 +1200,13 @@ class TradingBot:
                     'exit_policy': exit_policy,
                     'risk_mult': exit_policy.get('risk_mult', 1.0),
                 }
+                self.active_trade_store.upsert(ticket, self.active_trades[ticket])
+                if not self.trade_journal.has_event(ticket, "OPEN"):
+                    logger.error(f"[LIFECYCLE] #{ticket} missing OPEN after OrderManager.place_order; writing synthetic OPEN")
+                    self.order_manager._ensure_open_event(
+                        ticket, self.active_trades[ticket], reason="missing_open_event_after_place_order",
+                        comment="synthetic open reconstructed immediately after place_order",
+                    )
                 self.tracker.log_trade(ticket, symbol, signal_name, price, lot)
                 self.hub.on_trade_open(symbol, action=rl_act,
                                        market_data=sym_data, signal_data=sig_data)

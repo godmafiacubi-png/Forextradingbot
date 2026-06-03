@@ -4,6 +4,8 @@ import time
 
 import MetaTrader5 as mt5
 
+from execution.trade_logger import EVENT_OPEN, JOURNAL_FIELDS
+
 logger = logging.getLogger(__name__)
 
 
@@ -12,7 +14,7 @@ class OrderManager:
 
     def __init__(self, mt5_connector, max_open_trades=3, max_per_symbol=1,
                  dry_run=True, magic=123456, deviation=20, trade_journal=None,
-                 slippage_cooldown_seconds=None):
+                 slippage_cooldown_seconds=None, active_trade_store=None):
         self.mt5 = mt5_connector
         self.max_open_trades = max_open_trades
         self.max_per_symbol = max_per_symbol
@@ -20,6 +22,7 @@ class OrderManager:
         self.magic = magic
         self.deviation = deviation
         self.trade_journal = trade_journal
+        self.active_trade_store = active_trade_store
         if slippage_cooldown_seconds is None:
             try:
                 from config.settings import SLIPPAGE_REJECTION_COOLDOWN_SECONDS
@@ -41,6 +44,75 @@ class OrderManager:
         except Exception as exc:
             logger.warning(f"Trade journal write failed: {exc}")
             return None
+
+    def _journal_has_event(self, ticket, event_type):
+        has_event = getattr(self.trade_journal, "has_event", None)
+        return callable(has_event) and has_event(ticket, event_type)
+
+    def _active_trade_metadata(self, ticket):
+        if self.active_trade_store is None:
+            return {}
+        try:
+            return dict(self.active_trade_store.get(ticket, {}) or {})
+        except Exception as exc:
+            logger.warning(f"Active trade metadata load failed for #{ticket}: {exc}")
+            return {}
+
+    @staticmethod
+    def _journal_context(metadata):
+        return {key: value for key, value in metadata.items() if key in JOURNAL_FIELDS and value is not None}
+
+    def _persist_active_trade(self, ticket, metadata):
+        if self.active_trade_store is None:
+            return
+        try:
+            self.active_trade_store.upsert(ticket, metadata)
+        except Exception as exc:
+            logger.warning(f"Active trade metadata save failed for #{ticket}: {exc}")
+
+    def _remove_active_trade(self, ticket):
+        if self.active_trade_store is None:
+            return
+        try:
+            self.active_trade_store.remove(ticket)
+        except Exception as exc:
+            logger.warning(f"Active trade metadata removal failed for #{ticket}: {exc}")
+
+    def _ensure_open_event(self, ticket, metadata, *, reason, comment):
+        if self.trade_journal is None or self._journal_has_event(ticket, EVENT_OPEN):
+            return
+        logger.error(f"[LIFECYCLE] #{ticket} missing OPEN; writing synthetic OPEN ({reason})")
+        context = self._journal_context(metadata)
+        for key in ("ticket", "symbol", "side", "volume", "price", "sl", "tp", "comment", "source", "reason"):
+            context.pop(key, None)
+        self._journal_event(
+            "log_open", ticket, metadata.get("symbol", ""), metadata.get("side", metadata.get("signal", "")),
+            metadata.get("volume", metadata.get("lots")), metadata.get("entry_price", metadata.get("price")),
+            sl=metadata.get("sl"), tp=metadata.get("tp"), source="lifecycle_backfill", reason=reason,
+            comment=comment, **context,
+        )
+
+    def _ensure_open_for_position(self, pos):
+        metadata = self._active_trade_metadata(pos.ticket)
+        metadata.setdefault("symbol", pos.symbol)
+        metadata.setdefault("side", self._position_side(pos))
+        metadata.setdefault("volume", getattr(pos, "volume", None))
+        metadata.setdefault("entry_price", getattr(pos, "price_open", None))
+        metadata.setdefault("sl", getattr(pos, "sl", None))
+        metadata.setdefault("tp", getattr(pos, "tp", None))
+        self._persist_active_trade(pos.ticket, metadata)
+        self._ensure_open_event(
+            pos.ticket, metadata, reason="missing_open_event_before_management",
+            comment="synthetic open reconstructed before position management",
+        )
+        return metadata
+
+    def _management_context(self, pos):
+        metadata = self._ensure_open_for_position(pos)
+        context = self._journal_context(metadata)
+        for key in ("ticket", "symbol", "side", "volume", "price", "sl", "tp", "pnl", "comment", "source", "reason"):
+            context.pop(key, None)
+        return context
 
     @staticmethod
     def _side_label(order_type):
@@ -387,15 +459,26 @@ class OrderManager:
                 return None
 
             logger.info(f"[TRADE] {side} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
+            ticket = result.order
             self._journal_event(
-                "log_order_filled", result.order, symbol, side, volume, price,
+                "log_order_filled", ticket, symbol, side, volume, price,
                 sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
             )
             self._journal_event(
-                "log_open", result.order, symbol, side, volume, price,
+                "log_open", ticket, symbol, side, volume, price,
                 sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
             )
-            return result.order
+            active_metadata = {
+                "symbol": symbol, "side": side, "signal": side, "volume": volume, "lots": volume,
+                "entry_price": price, "price": price, "sl": stop_loss, "tp": take_profit,
+                "diagnostics": dict(journal_context), **journal_context,
+            }
+            self._persist_active_trade(ticket, active_metadata)
+            self._ensure_open_event(
+                ticket, active_metadata, reason="missing_open_event_after_fill",
+                comment="synthetic open reconstructed immediately after successful fill",
+            )
+            return ticket
         except Exception as e:
             logger.error(f"Place order error: {e}")
             if attempted:
@@ -480,14 +563,14 @@ class OrderManager:
             if self.dry_run:
                 self._journal_event(
                     "log_sl_modified", ticket, pos.symbol, self._position_side(pos), sl=sl, tp=tp,
-                    comment="dry-run SL/TP modify",
+                    comment="dry-run SL/TP modify", **self._management_context(pos),
                 )
                 return True
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[MODIFY] #{ticket} {pos.symbol} SL={sl:.{digits}f} TP={tp:.{digits}f}")
                 self._journal_event(
                     "log_sl_modified", ticket, pos.symbol, self._position_side(pos), sl=sl, tp=tp,
-                    comment="SL/TP modified",
+                    comment="SL/TP modified", **self._management_context(pos),
                 )
                 return True
             error_msg = result.comment if result else 'None'
@@ -518,14 +601,14 @@ class OrderManager:
             if self.dry_run:
                 self._journal_event(
                     "log_sl_modified", pos.ticket, pos.symbol, self._position_side(pos),
-                    sl=new_sl, tp=pos.tp, comment="dry-run SL modify",
+                    sl=new_sl, tp=pos.tp, comment="dry-run SL modify", **self._management_context(pos),
                 )
                 return True
             if result and result.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[SL] #{pos.ticket} {pos.symbol} SL -> {new_sl:.{digits}f}")
                 self._journal_event(
                     "log_sl_modified", pos.ticket, pos.symbol, self._position_side(pos),
-                    sl=new_sl, tp=pos.tp, comment="SL modified",
+                    sl=new_sl, tp=pos.tp, comment="SL modified", **self._management_context(pos),
                 )
                 return True
             error_msg = result.comment if result else 'None'
@@ -585,6 +668,7 @@ class OrderManager:
             if self.dry_run:
                 pnl = getattr(pos, "profit", None)
                 context = {"comment": f"dry-run partial close stage={stage_label}" if stage_label else "dry-run partial close", "pnl": pnl}
+                context.update(self._management_context(pos))
                 if pnl is None:
                     context["reason"] = "pnl_unavailable"
                     context["comment"] = "pnl_unavailable"
@@ -599,6 +683,7 @@ class OrderManager:
                 logger.info(f"[PARTIAL] #{ticket} {pos.symbol} closed {close_volume}/{pos.volume} lots ({close_pct:.0%})")
                 pnl = getattr(pos, "profit", None)
                 context = {"comment": f"partial close stage={stage_label} {close_pct:.0%}" if stage_label else f"partial close {close_pct:.0%}", "pnl": pnl}
+                context.update(self._management_context(pos))
                 if pnl is None:
                     context["reason"] = "pnl_unavailable"
                     context["comment"] = "pnl_unavailable"
@@ -699,6 +784,7 @@ class OrderManager:
             if self.dry_run:
                 pnl = getattr(pos, "profit", None)
                 context = {"comment": "dry-run close", "pnl": pnl}
+                context.update(self._management_context(pos))
                 if pnl is None:
                     context["reason"] = "pnl_unavailable"
                     context["comment"] = "pnl_unavailable"
@@ -706,11 +792,13 @@ class OrderManager:
                     "log_close", ticket, pos.symbol, self._position_side(pos), pos.volume, price,
                     **context,
                 )
+                self._remove_active_trade(ticket)
                 return True
             if r and r.retcode == mt5.TRADE_RETCODE_DONE:
                 logger.info(f"[CLOSE] #{ticket} {pos.symbol}")
                 pnl = getattr(pos, "profit", None)
                 context = {"comment": "closed", "pnl": pnl}
+                context.update(self._management_context(pos))
                 if pnl is None:
                     context["reason"] = "pnl_unavailable"
                     context["comment"] = "pnl_unavailable"
@@ -718,6 +806,7 @@ class OrderManager:
                     "log_close", ticket, pos.symbol, self._position_side(pos), pos.volume, price,
                     **context,
                 )
+                self._remove_active_trade(ticket)
                 return True
             error_msg = r.comment if r else 'None'
             retcode = r.retcode if r else 0
