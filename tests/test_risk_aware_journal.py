@@ -36,3 +36,15 @@ def test_risk_aware_journal_delegates_other_events(tmp_path):
     assert row["event_type"] == "RISK_BLOCKED"
     assert risk_guard.failures == []
     assert risk_guard.successes == 0
+
+
+def test_risk_aware_journal_forwards_has_event_and_order_attempt(tmp_path):
+    journal = TradeJournal(csv_path=tmp_path / "trades.csv")
+    adapter = RiskAwareTradeJournal(journal, _RiskGuardSpy())
+
+    attempt = adapter.log_order_attempt("EURUSDm", "BUY", 0.1, 1.1)
+    filled = adapter.log_order_filled(321, "EURUSDm", "BUY", 0.1, 1.1)
+
+    assert attempt["event_type"] == "ORDER_ATTEMPT"
+    assert filled["event_type"] == "ORDER_FILLED"
+    assert adapter.has_event(321, "ORDER_FILLED") is True

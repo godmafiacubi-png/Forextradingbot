@@ -24,6 +24,18 @@ class RiskAwareTradeJournal:
         if self.risk_guard is not None:
             self.risk_guard.record_order_success()
 
+    def has_event(self, *args, **kwargs):
+        return self.journal.has_event(*args, **kwargs)
+
+    def log_signal(self, *args, **kwargs):
+        return self.journal.log_signal(*args, **kwargs)
+
+    def log_order_attempt(self, *args, **kwargs):
+        return self.journal.log_order_attempt(*args, **kwargs)
+
+    def log_order_rejected(self, *args, **kwargs):
+        return self.journal.log_order_rejected(*args, **kwargs)
+
     def log_order_failed(self, *args, **kwargs):
         comment = kwargs.get("comment") or (args[-1] if args else "")
         self._record_failure(str(comment))
@@ -38,3 +50,21 @@ class RiskAwareTradeJournal:
         # keep this idempotent enough for safety by resetting failure counters.
         self._record_success()
         return self.journal.log_open(*args, **kwargs)
+
+    def log_sl_modified(self, *args, **kwargs):
+        return self.journal.log_sl_modified(*args, **kwargs)
+
+    def log_partial_close(self, *args, **kwargs):
+        return self.journal.log_partial_close(*args, **kwargs)
+
+    def log_close(self, *args, **kwargs):
+        return self.journal.log_close(*args, **kwargs)
+
+    def log_rl_trade_result(self, *args, **kwargs):
+        return self.journal.log_rl_trade_result(*args, **kwargs)
+
+    def log_risk_blocked(self, *args, **kwargs):
+        return self.journal.log_risk_blocked(*args, **kwargs)
+
+    def log_news_blocked(self, *args, **kwargs):
+        return self.journal.log_news_blocked(*args, **kwargs)

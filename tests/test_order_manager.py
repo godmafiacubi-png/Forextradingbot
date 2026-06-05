@@ -813,3 +813,139 @@ def test_successful_fill_persists_active_trade_metadata(monkeypatch, tmp_path):
     assert metadata["entry_strategy"] == "breakout"
     assert metadata["market_context"] == "TREND"
     assert metadata["quality_score"] == 84
+
+
+def test_missing_order_filled_after_successful_fill_is_backfilled(monkeypatch, tmp_path):
+    sent = []
+    module = _load_order_manager(monkeypatch, sent)
+    from execution.trade_logger import TradeJournal
+
+    class DropFirstFilledJournal(TradeJournal):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.drop_filled = True
+
+        def log_order_filled(self, *args, **kwargs):
+            if self.drop_filled:
+                self.drop_filled = False
+                return None
+            return super().log_order_filled(*args, **kwargs)
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=DropFirstFilledJournal(csv_path=journal_path),
+    )
+
+    ticket = manager.place_order("EURUSDm", module.mt5.ORDER_TYPE_BUY, 0.1, 1.099, 1.102)
+
+    assert ticket == 123
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == [
+        "ORDER_ATTEMPT", "ORDER_FAILED", "ORDER_FILLED", "OPEN",
+    ]
+    assert rows[1]["reason"] == "JOURNAL_WRITE_FAILED"
+    assert rows[2]["source"] == "lifecycle_backfill"
+    assert rows[2]["reason"] == "missing_filled_event_after_fill"
+
+
+def test_btc_trailing_cooldown_suppresses_frequent_modify_calls(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(
+        ticket=188, symbol="BTCUSDm", type=0, volume=0.1, price_open=60000.0,
+        sl=60000.0, tp=62000.0, profit=10.0,
+    )
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+
+    class _BtcInfo:
+        digits = 2
+        point = 0.01
+        trade_stops_level = 50
+
+    module.mt5.symbol_info = lambda symbol: _BtcInfo()
+    now = [1000.0]
+    monkeypatch.setattr(module.time, "time", lambda: now[0])
+    from execution.trade_logger import TradeJournal
+
+    class _BtcConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.01, "digits": 2, "bid": 60010.0, "ask": 60010.5,
+                "spread": 50, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01,
+            }
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(_BtcConnector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+
+    assert manager.modify_sl(188, 60003.0) is True
+    now[0] += 5.0
+    assert manager.modify_sl(188, 60005.5) is False
+    now[0] += 5.0
+    assert manager.modify_sl(188, 60008.0) is False
+
+    rows = _journal_rows(journal_path)
+    assert [row["event_type"] for row in rows] == ["OPEN", "SL_MODIFIED"]
+    assert len([request for request in sent if request["action"] == module.mt5.TRADE_ACTION_SLTP]) == 1
+
+
+def test_btc_min_sl_move_suppresses_tiny_sl_moves(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(
+        ticket=189, symbol="BTCUSDm", type=0, volume=0.1, price_open=60000.0,
+        sl=60000.0, tp=62000.0, profit=10.0,
+    )
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+
+    class _BtcInfo:
+        digits = 2
+        point = 0.01
+        trade_stops_level = 1
+
+    module.mt5.symbol_info = lambda symbol: _BtcInfo()
+    from execution.trade_logger import TradeJournal
+
+    class _BtcConnector:
+        def get_symbol_info(self, symbol):
+            return {
+                "point": 0.01, "digits": 2, "bid": 60010.0, "ask": 60010.5,
+                "spread": 50, "volume_min": 0.01, "volume_max": 10.0, "volume_step": 0.01,
+            }
+
+    journal_path = tmp_path / "trades.csv"
+    manager = module.OrderManager(_BtcConnector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path))
+
+    assert manager.modify_sl(189, 60001.99) is False
+    assert sent == []
+    assert _journal_rows(journal_path) == []
+
+
+def test_news_blocked_includes_active_trade_diagnostics(monkeypatch, tmp_path):
+    position = types.SimpleNamespace(
+        ticket=190, symbol="EURUSDm", type=0, volume=0.2, price_open=1.1,
+        price_current=1.101, sl=1.099, tp=1.104, profit=12.0,
+    )
+    sent = []
+    module = _load_order_manager(monkeypatch, sent, positions=[position])
+    from execution.trade_logger import ActiveTradeStore, TradeJournal
+
+    journal_path = tmp_path / "trades.csv"
+    store = ActiveTradeStore(tmp_path / "active_trades.json")
+    store.upsert(190, {
+        "symbol": "EURUSDm", "side": "BUY", "volume": 0.2, "entry_price": 1.1,
+        "sl": 1.099, "tp": 1.104, "entry_strategy": "breakout",
+        "market_context": "TREND", "regime": "TREND", "planned_rr": 2.0,
+        "execution_rr": 1.8, "quality_score": 84,
+    })
+    manager = module.OrderManager(
+        _Connector(), dry_run=False, trade_journal=TradeJournal(csv_path=journal_path), active_trade_store=store,
+    )
+
+    manager.apply_news_protection("EURUSDm", "BREAKEVEN", atr_value=0.002)
+
+    rows = _journal_rows(journal_path)
+    news_row = next(row for row in rows if row["event_type"] == "NEWS_BLOCKED")
+    assert news_row["entry_strategy"] == "breakout"
+    assert news_row["market_context"] == "TREND"
+    assert news_row["regime"] == "TREND"
+    assert news_row["planned_rr"] == "2.0"
+    assert news_row["execution_rr"] == "1.8"
+    assert news_row["quality_score"] == "84"

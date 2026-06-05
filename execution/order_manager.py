@@ -4,7 +4,7 @@ import time
 
 import MetaTrader5 as mt5
 
-from execution.trade_logger import EVENT_OPEN, JOURNAL_FIELDS
+from execution.trade_logger import EVENT_OPEN, EVENT_ORDER_FILLED, JOURNAL_FIELDS
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +33,7 @@ class OrderManager:
         self._slippage_cooldowns = {}
         self._slippage_cooldown_block_logged = set()
         self._partial_close_stages = {}
+        self._sl_modify_cooldowns = {}
         self._btc_max_entry_spread_points = self._resolve_btc_max_entry_spread_points()
 
     def _journal_event(self, method_name, *args, **kwargs):
@@ -40,9 +41,49 @@ class OrderManager:
         if self.trade_journal is None:
             return None
         try:
-            return getattr(self.trade_journal, method_name)(*args, **kwargs)
+            result = getattr(self.trade_journal, method_name)(*args, **kwargs)
         except Exception as exc:
             logger.warning(f"Trade journal write failed: {exc}")
+            if method_name in {"log_order_attempt", "log_order_filled"}:
+                self._journal_write_failed_diagnostic(method_name, args, kwargs, str(exc))
+            return None
+        if result is None and method_name in {"log_order_attempt", "log_order_filled"}:
+            self._journal_write_failed_diagnostic(method_name, args, kwargs, "journal method returned None")
+        return result
+
+    def _journal_write_failed_diagnostic(self, failed_method, args, kwargs, detail):
+        if self.trade_journal is None:
+            return None
+        try:
+            if failed_method == "log_order_filled" and args:
+                ticket = args[0]
+                symbol = args[1] if len(args) > 1 else kwargs.get("symbol", "")
+                side = args[2] if len(args) > 2 else kwargs.get("side", "")
+                volume = args[3] if len(args) > 3 else kwargs.get("volume")
+                price = args[4] if len(args) > 4 else kwargs.get("price")
+            else:
+                ticket = None
+                symbol = args[0] if args else kwargs.get("symbol", "")
+                side = args[1] if len(args) > 1 else kwargs.get("side", "")
+                volume = args[2] if len(args) > 2 else kwargs.get("volume")
+                price = args[3] if len(args) > 3 else kwargs.get("price")
+            context = {key: value for key, value in kwargs.items() if key in JOURNAL_FIELDS}
+            for key in ("ticket", "symbol", "side", "volume", "price", "sl", "tp", "comment", "source", "reason"):
+                context.pop(key, None)
+            message = f"JOURNAL_WRITE_FAILED {failed_method}: {detail}"
+            if ticket is None:
+                return self.trade_journal.log_order_failed(
+                    symbol, side=side, volume=volume, price=price,
+                    sl=kwargs.get("sl"), tp=kwargs.get("tp"), comment=message,
+                    source="journal_diagnostic", reason="JOURNAL_WRITE_FAILED", **context,
+                )
+            return self.trade_journal.log_order_failed(
+                symbol, side=side, volume=volume, price=price,
+                sl=kwargs.get("sl"), tp=kwargs.get("tp"), comment=message,
+                source="journal_diagnostic", reason="JOURNAL_WRITE_FAILED", **context,
+            )
+        except Exception as exc:
+            logger.warning(f"Trade journal diagnostic write failed: {exc}")
             return None
 
     def _journal_has_event(self, ticket, event_type):
@@ -77,6 +118,20 @@ class OrderManager:
             self.active_trade_store.remove(ticket)
         except Exception as exc:
             logger.warning(f"Active trade metadata removal failed for #{ticket}: {exc}")
+
+    def _ensure_filled_event(self, ticket, metadata, *, reason, comment):
+        if self.trade_journal is None or self._journal_has_event(ticket, EVENT_ORDER_FILLED):
+            return
+        logger.error(f"[LIFECYCLE] #{ticket} missing ORDER_FILLED; writing synthetic ORDER_FILLED ({reason})")
+        context = self._journal_context(metadata)
+        for key in ("ticket", "symbol", "side", "volume", "price", "sl", "tp", "comment", "source", "reason"):
+            context.pop(key, None)
+        self._journal_event(
+            "log_order_filled", ticket, metadata.get("symbol", ""), metadata.get("side", metadata.get("signal", "")),
+            metadata.get("volume", metadata.get("lots")), metadata.get("entry_price", metadata.get("price")),
+            sl=metadata.get("sl"), tp=metadata.get("tp"), source="lifecycle_backfill", reason=reason,
+            comment=comment, **context,
+        )
 
     def _ensure_open_event(self, ticket, metadata, *, reason, comment):
         if self.trade_journal is None or self._journal_has_event(ticket, EVENT_OPEN):
@@ -460,20 +515,24 @@ class OrderManager:
 
             logger.info(f"[TRADE] {side} {symbol} {volume}lots @{price:.{digits}f} SL={stop_loss:.{digits}f} TP={take_profit:.{digits}f}")
             ticket = result.order
-            self._journal_event(
-                "log_order_filled", ticket, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
-            )
-            self._journal_event(
-                "log_open", ticket, symbol, side, volume, price,
-                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
-            )
             active_metadata = {
                 "symbol": symbol, "side": side, "signal": side, "volume": volume, "lots": volume,
                 "entry_price": price, "price": price, "sl": stop_loss, "tp": take_profit,
                 "diagnostics": dict(journal_context), **journal_context,
             }
+            self._journal_event(
+                "log_order_filled", ticket, symbol, side, volume, price,
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
+            )
             self._persist_active_trade(ticket, active_metadata)
+            self._ensure_filled_event(
+                ticket, active_metadata, reason="missing_filled_event_after_fill",
+                comment="synthetic filled reconstructed immediately after successful fill",
+            )
+            self._journal_event(
+                "log_open", ticket, symbol, side, volume, price,
+                sl=stop_loss, tp=take_profit, comment=execution_comment, source="order_manager", **journal_context
+            )
             self._ensure_open_event(
                 ticket, active_metadata, reason="missing_open_event_after_fill",
                 comment="synthetic open reconstructed immediately after successful fill",
@@ -501,6 +560,53 @@ class OrderManager:
         except Exception:
             return 0.0
 
+    @staticmethod
+    def _normalized_symbol(symbol):
+        return str(symbol or "").upper()
+
+    def _symbol_min_sl_modify_points(self, symbol):
+        normalized = self._normalized_symbol(symbol)
+        if normalized.startswith("BTC"):
+            return 200.0
+        if normalized.startswith("XAU"):
+            return 50.0
+        return None
+
+    def _min_sl_modify_delta(self, symbol):
+        broker_min = self._min_sl_modify_distance(symbol)
+        configured_points = self._symbol_min_sl_modify_points(symbol)
+        if configured_points is None:
+            return broker_min
+        try:
+            info = mt5.symbol_info(symbol)
+            point = float(getattr(info, "point", 0) or 0) if info is not None else 0.0
+        except Exception:
+            point = 0.0
+        if point <= 0:
+            return broker_min
+        return max(broker_min, configured_points * point)
+
+    def _sl_modify_cooldown_seconds(self, symbol):
+        normalized = self._normalized_symbol(symbol)
+        if normalized.startswith("BTC"):
+            return 60.0
+        if normalized.startswith("XAU"):
+            return 20.0
+        return 5.0
+
+    def _sl_modify_cooldown_active(self, ticket, symbol):
+        cooldown = self._sl_modify_cooldown_seconds(symbol)
+        if cooldown <= 0:
+            return False
+        last_modified = self._sl_modify_cooldowns.get(str(ticket))
+        if last_modified is None:
+            return False
+        remaining = cooldown - (time.time() - last_modified)
+        if remaining > 0:
+            logger.debug(f"[MODIFY] #{ticket} {symbol} cooldown active for {remaining:.1f}s SKIP")
+            return True
+        return False
+
     def modify_sl(self, ticket, new_sl):
         """Modify SL — ใช้โดย SmartTrailingV2"""
         try:
@@ -527,7 +633,7 @@ class OrderManager:
                 current_price = si['bid'] if pos.type == 0 else si['ask']
                 new_sl, _ = self._check_stop_level(pos.symbol, current_price, new_sl, pos.tp, pos.type)
 
-            min_distance = self._min_sl_modify_distance(pos.symbol)
+            min_distance = self._min_sl_modify_delta(pos.symbol)
             if pos.sl > 0 and abs(new_sl - pos.sl) < min_distance:
                 logger.debug(
                     f"[MODIFY] #{ticket} {pos.symbol} delta={abs(new_sl - pos.sl):.{digits}f} "
@@ -535,7 +641,13 @@ class OrderManager:
                 )
                 return False
 
-            return self._modify_sl(pos, new_sl)
+            if self._sl_modify_cooldown_active(ticket, pos.symbol):
+                return False
+
+            modified = self._modify_sl(pos, new_sl)
+            if modified:
+                self._sl_modify_cooldowns[str(ticket)] = time.time()
+            return modified
         except Exception as e:
             logger.error(f"Modify SL error: {e}")
             return False
@@ -719,6 +831,7 @@ class OrderManager:
                     self._journal_event(
                         "log_news_blocked", pos.ticket, symbol, self._position_side(pos), price=cp,
                         sl=pos.sl, tp=pos.tp, comment="news protection force close",
+                        **self._management_context(pos),
                     )
                     self.close_order(pos.ticket)
                     continue
@@ -757,6 +870,7 @@ class OrderManager:
                     self._journal_event(
                         "log_news_blocked", pos.ticket, symbol, self._position_side(pos), price=cp,
                         sl=new_sl, tp=pos.tp, comment=f"news protection {action}",
+                        **self._management_context(pos),
                     )
                     logger.info(f"[NEWS] {action} #{pos.ticket} {symbol} SL -> {new_sl:.5f}")
         except Exception as e:
