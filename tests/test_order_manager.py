@@ -154,6 +154,7 @@ def test_place_order_writes_execution_journal_events(monkeypatch, tmp_path):
             "regime": "QUIET",
             "session": "London",
             "planned_rr": 2.5,
+            "avg_spread": 18,
         },
     )
 
@@ -171,8 +172,13 @@ def test_place_order_writes_execution_journal_events(monkeypatch, tmp_path):
     assert rows[0]["quality_score"] == "82"
     assert rows[0]["quality_grade"] == "A"
     assert rows[0]["planned_rr"] == "2.5"
+    assert rows[0]["avg_spread"] == "18"
+    assert rows[1]["avg_spread"] == "18"
+    assert rows[2]["avg_spread"] == "18"
     assert float(rows[0]["execution_rr"]) == pytest.approx(1.5, abs=1e-6)
     assert rows[2]["entry_strategy"] == "regime_adaptive_entry"
+    assert all(row["reason"] != "JOURNAL_WRITE_FAILED" for row in rows)
+    assert all("JOURNAL_WRITE_FAILED" not in row["comment"] for row in rows)
 
 
 def test_place_order_journals_rejected_slippage(monkeypatch, tmp_path):
